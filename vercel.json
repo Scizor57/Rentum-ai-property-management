@@ -5,7 +5,8 @@
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
-        "maxLambdaSize": "15mb"
+        "maxLambdaSize": "15mb",
+        "runtime": "python3.12"
       }
     }
   ],
@@ -20,5 +21,8 @@
       "memory": 1024,
       "maxDuration": 30
     }
+  },
+  "env": {
+    "PYTHONPATH": "."
   }
 } 

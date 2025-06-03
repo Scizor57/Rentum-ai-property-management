@@ -1,7 +1,15 @@
+#!/usr/bin/env python3
+"""
+Rentum AI API - Vercel Serverless Deployment
+FastAPI application with embedded OCR service for property management
+"""
+
+# ===== IMPORTS =====
 from fastapi import FastAPI, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import Dict, Any, Optional
+import json
 
 # ===== EMBEDDED OCR SERVICE =====
 # No external dependencies for Vercel serverless
@@ -232,6 +240,31 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
         "total": len(ocr_results)
     }
 
-# ===== VERCEL HANDLER EXPORT =====
-# For Vercel Python runtime: FastAPI is ASGI, so we just need the 'app' variable
-# Vercel will automatically detect and use the 'app' variable for ASGI applications 
+# ===== VERCEL ASGI EXPORT =====
+# Export the ASGI application for Vercel
+# Multiple export patterns to ensure compatibility
+
+def get_app():
+    """Return the FastAPI application instance"""
+    return app
+
+# Standard ASGI application export
+application = app
+
+# Vercel handler function (required for some deployments)
+def handler(request, *args, **kwargs):
+    """Vercel handler - returns ASGI app"""
+    return app
+
+# Alternative handler pattern
+def main():
+    """Main function for serverless deployment"""
+    return app
+
+# Ensure proper module exports
+__all__ = ['app', 'application', 'handler', 'get_app', 'main']
+
+# For local development
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
