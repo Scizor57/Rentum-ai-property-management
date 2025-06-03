@@ -14,7 +14,12 @@ import AIReviews from './components/AIReviews';
 import Profile from './components/Profile';
 import Login from './components/Login';
 
-const API_BASE = 'http://localhost:8000'; // Backend API URL
+// API URL configuration for both development and production
+const API_BASE = process.env.REACT_APP_API_URL || process.env.NODE_ENV === 'production' 
+  ? 'https://your-backend-url.vercel.app'  // Replace with your actual backend URL after deployment
+  : 'http://localhost:8000'; // Local development
+
+console.log('🔗 API_BASE URL:', API_BASE, '(Environment:', process.env.NODE_ENV, ')');
 
 function App() {
   // Navigation state
