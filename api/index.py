@@ -196,5 +196,7 @@ async def list_ocr_scans(user_id: str = None):
         "total": len(ocr_results)
     }
 
-# Vercel handler - standard pattern for api folder
+# ===== VERCEL HANDLER EXPORTS =====
+# Correct ASGI exports for Vercel Python runtime with FastAPI
+app_asgi = app
 handler = app 
