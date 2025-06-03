@@ -315,7 +315,7 @@ function App() {
   const handleChatChange = e => setChatForm({ ...chatForm, [e.target.name]: e.target.value });
   const handleLoginChange = e => setLoginForm({ ...loginForm, [e.target.name]: e.target.value });
   
-  // OCR Upload Handler
+  // OCR Upload Handler - Google Vision ONLY
   const handleOcrUpload = async () => {
     if (!currentUser) {
       alert('Please log in first to use the AI Scanner');
@@ -327,7 +327,7 @@ function App() {
       return;
     }
     
-    console.log('🔍 Starting OCR upload for user:', currentUser.id, 'document type:', ocrForm.document_type);
+    console.log('🔍 Starting Google Vision OCR upload for user:', currentUser.id, 'document type:', ocrForm.document_type);
     
     const formData = new FormData();
     formData.append('file', ocrForm.file);
@@ -340,76 +340,43 @@ function App() {
         body: formData
       });
       
-      if (res.ok) {
-        const newScan = await res.json();
-        setOcrScans([...ocrScans, newScan]);
+      const result = await res.json();
+      
+      if (res.ok && result.status === 'completed') {
+        // Success - real Google Vision OCR completed
+        console.log('✅ Google Vision OCR completed:', result);
+        setOcrScans([...ocrScans, result]);
         setOcrForm({ user_id: '', document_type: '', file: null });
-        autoFillFromOcrData(newScan);
+        autoFillFromOcrData(result);
       } else {
-        console.warn('⚠️ OCR API failed, using demo OCR results');
-        handleDemoOcr();
+        // Error from backend
+        console.error('❌ OCR failed:', result);
+        const errorMessage = result.message || 'Unknown OCR error';
+        
+        if (result.error_code === 'GOOGLE_VISION_NOT_CONFIGURED') {
+          alert(`🔧 Google Vision OCR Setup Required\n\n${errorMessage}\n\nSteps to fix:\n1. Set up Google Cloud service account\n2. Enable Vision API\n3. Add credentials to Vercel environment variables\n4. Redeploy backend\n\nSee GOOGLE_VISION_SETUP.md for detailed instructions.`);
+        } else {
+          alert(`❌ OCR Processing Failed\n\n${errorMessage}\n\nPlease try:\n• A clearer image\n• Different file format (JPG, PNG, PDF)\n• Smaller file size\n• Check if Google Vision is properly configured`);
+        }
       }
     } catch (error) {
-      console.warn('⚠️ OCR API connection failed, using demo OCR results:', error.message);
-      handleDemoOcr();
+      console.error('❌ OCR API connection failed:', error);
+      alert(`❌ Cannot Connect to OCR Service\n\nError: ${error.message}\n\nThis could mean:\n• Backend is not deployed\n• Network connection issue\n• Backend Google Vision is not configured\n\nPlease contact support if the issue persists.`);
     }
-  };
-  
-  // Demo OCR functionality when API is unavailable
-  const handleDemoOcr = () => {
-    const demoOcrResult = {
-      id: Date.now(),
-      user_id: currentUser.id,
-      document_type: ocrForm.document_type,
-      status: 'completed',
-      confidence_score: 0.85,
-      extracted_data: ocrForm.document_type === 'rental_agreement' ? {
-        property_address: '123 Demo Street, Demo City, Demo State 12345',
-        rent_amount: '1500',
-        security_deposit: '3000',
-        lease_start_date: '2024-01-01',
-        lease_end_date: '2024-12-31',
-        landlord_name: 'Jane Landlord',
-        tenant_name: 'John Tenant',
-        property_type: 'Apartment',
-        utilities_included: 'Water and Trash',
-        pet_policy: 'No pets allowed',
-        key_terms: ['Monthly rent due on 1st', 'Security deposit refundable', '30 day notice required']
-      } : ocrForm.document_type === 'id_card' ? {
-        name: 'Demo User',
-        id_number: 'DEMO123456789',
-        address: '123 Demo Street, Demo City',
-        date_of_birth: '1990-01-01'
-      } : {
-        document_title: 'Demo Property Document',
-        property_address: '123 Demo Street, Demo City',
-        document_date: new Date().toISOString().split('T')[0]
-      },
-      confidence_scores: {
-        property_address: 0.92,
-        rent_amount: 0.88,
-        landlord_name: 0.85,
-        tenant_name: 0.87
-      },
-      created_at: new Date().toISOString()
-    };
-
-    setOcrScans([...ocrScans, demoOcrResult]);
-    setOcrForm({ user_id: '', document_type: '', file: null });
-    
-    const message = `🎯 Demo OCR scan completed!\n\n📋 This is a demonstration of how our AI scanner works:\n• Document type: ${ocrForm.document_type}\n• Confidence score: 85%\n• Key information extracted\n\n⚠️ Note: This is demo data since the OCR API is currently unavailable.`;
-    alert(message);
-    
-    autoFillFromOcrData(demoOcrResult);
   };
 
   const autoFillFromOcrData = (scanResult) => {
+    if (!scanResult.extracted_data || scanResult.mode !== 'google_vision_ocr') {
+      console.warn('⚠️ Unexpected scan result format:', scanResult);
+      return;
+    }
+    
     if (scanResult.document_type === 'rental_agreement') {
-      const message = `🎯 Rental agreement scanned successfully!\n\n📋 Go to the "Agreements" section to view all extracted data including:\n• Property information\n• Landlord and tenant details\n• Financial terms\n• Lease dates\n• Confidence scores\n\nThe AI has processed your document and the data is ready for review!`;
+      const message = `🎯 Rental Agreement Scanned with Google Vision!\n\n📋 Extracted Information:\n• Mode: ${scanResult.mode}\n• Confidence: ${Math.round((scanResult.confidence_score || 0) * 100)}%\n• Text blocks detected: ${scanResult.text_blocks_detected || 0}\n\n✅ Go to "Agreements" section to view all extracted data including property details, financial terms, and lease information.\n\nReal Google Vision OCR processing complete!`;
       alert(message);
-          setActiveTab('agreements');
+      setActiveTab('agreements');
     } else {
-      const message = `🎯 Document scanned successfully!\n\n📊 Document type: ${scanResult.document_type}\n📋 Check the "Agreements" section if this was a rental agreement, or the "AI Scanner" tab to see all scan results.`;
+      const message = `🎯 Document Scanned Successfully!\n\n📊 Document type: ${scanResult.document_type}\n🤖 Processed with: ${scanResult.mode}\n📈 Confidence: ${Math.round((scanResult.confidence_score || 0) * 100)}%\n\n📋 Check the "AI Scanner" tab to see all scan results and extracted data.`;
       alert(message);
     }
   };
