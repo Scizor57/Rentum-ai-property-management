@@ -315,6 +315,7 @@ function App() {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const addProperty = async e => {
     e.preventDefault();
     const propertyData = { 
@@ -334,6 +335,7 @@ function App() {
     }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const addAgreement = async e => {
     e.preventDefault();
     const res = await fetch(`${API_BASE}/agreements`, {
