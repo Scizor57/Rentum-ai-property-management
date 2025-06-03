@@ -308,45 +308,39 @@ async def startup():
     """Initialize database connection with proper timeout and error handling"""
     print("🚀 Starting Rentum AI backend...")
     
-    # Only try to connect to database if URL is provided and not None
-    if DATABASE_URL and DATABASE_URL != "None":
-        try:
-            print(f"🔌 Attempting to connect to database...")
-            # Create connection pool with proper timeout settings
-            app.state.db = await asyncpg.create_pool(
-                DATABASE_URL,
-                min_size=1,
-                max_size=5,
-                timeout=10.0,  # Connection timeout
-                command_timeout=30.0  # Query timeout
-            )
-            print("✅ Database connection pool created successfully!")
-            
-            # Test the connection
-            async with app.state.db.acquire() as connection:
-                result = await connection.fetchval("SELECT 1")
-                print(f"✅ Database test query successful: {result}")
-                
-        except asyncio.TimeoutError:
-            print("⏰ Database connection timed out")
-            print("💡 This is normal for Supabase free tier with cold starts")
-            print("🔄 Continuing with in-memory fallback...")
-            app.state.db = None
-        except Exception as e:
-            print(f"❌ Database connection failed: {e}")
-            print("💡 Common solutions:")
-            print("   - Check your DATABASE_URL in environment variables")
-            print("   - Ensure Supabase project is active (not paused)")
-            print("   - Verify network connectivity")
-            print("🔄 Continuing with in-memory fallback...")
-            app.state.db = None
-    else:
-        print("📝 No DATABASE_URL provided, using in-memory storage")
-        app.state.db = None
-    
-    # Create demo users for testing regardless of database status
-    await create_demo_data()
+    # Skip database initialization in serverless environments on cold start
+    # Instead, initialize database connection lazily when needed
+    app.state.db = None
+    app.state.startup_complete = True
     print("🎉 Backend startup complete!")
+
+async def get_database_connection():
+    """Get database connection, initializing if needed"""
+    if not hasattr(app.state, 'db') or app.state.db is None:
+        if DATABASE_URL and DATABASE_URL != "None":
+            try:
+                print(f"🔌 Initializing database connection...")
+                # Create connection pool with proper timeout settings
+                app.state.db = await asyncpg.create_pool(
+                    DATABASE_URL,
+                    min_size=1,
+                    max_size=3,  # Reduced for serverless
+                    timeout=5.0,  # Shorter timeout for serverless
+                    command_timeout=15.0  # Shorter query timeout
+                )
+                print("✅ Database connection established!")
+                
+                # Create demo data if needed
+                await create_demo_data()
+                
+            except Exception as e:
+                print(f"❌ Database connection failed: {e}")
+                app.state.db = None
+        else:
+            print("📝 No DATABASE_URL provided, using in-memory storage")
+            app.state.db = None
+    
+    return app.state.db
 
 async def create_demo_data():
     """Create demo users and sample data for testing"""
@@ -430,9 +424,12 @@ async def create_demo_data():
         }
     ]
     
-    if app.state.db:
+    # Try to get database connection
+    db = getattr(app.state, 'db', None)
+    
+    if db:
         try:
-            async with app.state.db.acquire() as connection:
+            async with db.acquire() as connection:
                 # Insert demo users (ignore if they already exist)
                 for user in demo_users:
                     try:
@@ -467,16 +464,20 @@ async def create_demo_data():
         except Exception as e:
             print(f"❌ Could not create demo data in database: {e}")
             # Fall back to in-memory
-            users_db.extend(demo_users)
-            properties_db.extend(demo_properties)
-            agreements_db.extend(demo_agreements)
-            print("✅ Demo data created in memory!")
+            if not hasattr(app.state, 'users_db_initialized'):
+                users_db.extend(demo_users)
+                properties_db.extend(demo_properties)
+                agreements_db.extend(demo_agreements)
+                app.state.users_db_initialized = True
+                print("✅ Demo data created in memory!")
     else:
         # Use in-memory storage
-        users_db.extend(demo_users)  
-        properties_db.extend(demo_properties)
-        agreements_db.extend(demo_agreements)
-        print("✅ Demo data created in memory!")
+        if not hasattr(app.state, 'users_db_initialized'):
+            users_db.extend(demo_users)  
+            properties_db.extend(demo_properties)
+            agreements_db.extend(demo_agreements)
+            app.state.users_db_initialized = True
+            print("✅ Demo data created in memory!")
         
     print("🎭 Demo Users Available:")
     for user in demo_users:
@@ -493,9 +494,10 @@ async def shutdown():
 
 @app.get("/")
 async def read_root():
-    if app.state.db:
+    db = await get_database_connection()
+    if db:
         try:
-            async with app.state.db.acquire() as connection:
+            async with db.acquire() as connection:
                 result = await connection.fetchval("SELECT NOW()")
                 return {"message": "Rentum AI backend is running!", "db_time": str(result), "database": "connected"}
         except Exception as e:
