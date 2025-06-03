@@ -16,8 +16,8 @@ import Login from './components/Login';
 
 // API URL configuration for both development and production
 const API_BASE = process.env.REACT_APP_API_URL || process.env.NODE_ENV === 'production' 
-  ? 'https://your-backend-url.vercel.app'  // Replace with your actual backend URL after deployment
-  : 'http://localhost:8000'; // Local development
+  ? 'https://rentum-ai-property-management.vercel.app/api'  // Updated with correct backend URL
+  : 'http://localhost:8008'; // Local development
 
 console.log('🔗 API_BASE URL:', API_BASE, '(Environment:', process.env.NODE_ENV, ')');
 // Build fix applied - eslint warnings resolved ✅
@@ -92,16 +92,48 @@ function App() {
 
   // Fetch users and other data
   useEffect(() => {
-    fetch(`${API_BASE}/users`).then(res => res.json()).then(setUsers);
-    fetch(`${API_BASE}/properties`).then(res => res.json()).then(setProperties);
-    fetch(`${API_BASE}/agreements`).then(res => res.json()).then(setAgreements);
-    fetch(`${API_BASE}/documents`).then(res => res.json()).then(setDocuments);
-    fetch(`${API_BASE}/payments`).then(res => res.json()).then(setPayments);
-    fetch(`${API_BASE}/issues`).then(res => res.json()).then(setIssues);
-    fetch(`${API_BASE}/notifications`).then(res => res.json()).then(setNotifications);
-    fetch(`${API_BASE}/chat`).then(res => res.json()).then(setChat);
-    fetch(`${API_BASE}/reviews/requests`).then(res => res.json()).then(setReviewRequests);
-    fetch(`${API_BASE}/reviews/responses`).then(res => res.json()).then(setReviewResponses);
+    const fetchData = async () => {
+      try {
+        const [usersRes, propertiesRes, agreementsRes, documentsRes, paymentsRes, issuesRes, notificationsRes, chatRes, reviewRequestsRes, reviewResponsesRes] = await Promise.all([
+          fetch(`${API_BASE}/users`),
+          fetch(`${API_BASE}/properties`),
+          fetch(`${API_BASE}/agreements`),
+          fetch(`${API_BASE}/documents`),
+          fetch(`${API_BASE}/payments`),
+          fetch(`${API_BASE}/issues`),
+          fetch(`${API_BASE}/notifications`),
+          fetch(`${API_BASE}/chat`),
+          fetch(`${API_BASE}/reviews/requests`),
+          fetch(`${API_BASE}/reviews/responses`)
+        ]);
+
+        if (usersRes.ok) setUsers(await usersRes.json());
+        if (propertiesRes.ok) setProperties(await propertiesRes.json());
+        if (agreementsRes.ok) setAgreements(await agreementsRes.json());
+        if (documentsRes.ok) setDocuments(await documentsRes.json());
+        if (paymentsRes.ok) setPayments(await paymentsRes.json());
+        if (issuesRes.ok) setIssues(await issuesRes.json());
+        if (notificationsRes.ok) setNotifications(await notificationsRes.json());
+        if (chatRes.ok) setChat(await chatRes.json());
+        if (reviewRequestsRes.ok) setReviewRequests(await reviewRequestsRes.json());
+        if (reviewResponsesRes.ok) setReviewResponses(await reviewResponsesRes.json());
+      } catch (error) {
+        console.error('Failed to fetch initial data:', error);
+        // Fallback to empty arrays if API fails
+        setUsers([]);
+        setProperties([]);
+        setAgreements([]);
+        setDocuments([]);
+        setPayments([]);
+        setIssues([]);
+        setNotifications([]);
+        setChat([]);
+        setReviewRequests([]);
+        setReviewResponses([]);
+      }
+    };
+
+    fetchData();
   }, []);
 
   // Fetch user-specific data when user logs in
@@ -442,6 +474,7 @@ function App() {
     { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
     { id: 'property-details', label: 'Property Details', icon: '🏡' },
     { id: 'documents', label: 'Documents', icon: '📄' },
+    { id: 'agreements', label: 'Agreements', icon: '📋' },
     { id: 'ocr-scanner', label: 'AI Scanner', icon: '🔍' },
     { id: 'payments', label: 'Payments', icon: '💳' },
     { id: 'ai-reviews', label: 'AI Reviews', icon: '🤖' },
@@ -503,6 +536,31 @@ function App() {
             addDocument={addDocument}
             setDocumentForm={setDocumentForm}
           />
+        );
+      case 'agreements':
+        return (
+          <div className="section">
+            <h2>📋 Rental Agreements</h2>
+            <div className="agreements-container">
+              <div className="agreements-list">
+                <h3>Your Agreements</h3>
+                {agreements.length > 0 ? (
+                  agreements.map(agreement => (
+                    <div key={agreement.id} className="agreement-item">
+                      <h4>Agreement #{agreement.id}</h4>
+                      <p><strong>Property:</strong> {properties.find(p => p.id === agreement.property_id)?.address || 'N/A'}</p>
+                      <p><strong>Start Date:</strong> {agreement.start_date}</p>
+                      <p><strong>End Date:</strong> {agreement.end_date}</p>
+                      <p><strong>Rent:</strong> ${agreement.rent}</p>
+                      <p><strong>Deposit:</strong> ${agreement.deposit}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p>No agreements found. Upload a rental agreement in the AI Scanner to extract agreement details automatically.</p>
+                )}
+              </div>
+            </div>
+          </div>
         );
       case 'payments':
         return (
