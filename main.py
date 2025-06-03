@@ -34,17 +34,17 @@ DEMO_PROPERTIES = [
 
 # Routes
 @app.get("/")
-def root():
+async def root():
     return {
         "status": "✅ WORKING",
         "message": "Rentum AI Backend is operational!",
         "timestamp": datetime.now().isoformat(),
-        "deployment": "vercel-optimized",
+        "deployment": "vercel-serverless",
         "endpoints": ["/demo", "/users", "/properties", "/health"]
     }
 
 @app.get("/demo")
-def demo():
+async def demo():
     return {
         "message": "🎭 Demo data ready for testing",
         "users": DEMO_USERS,
@@ -54,15 +54,15 @@ def demo():
     }
 
 @app.get("/users")
-def get_users():
+async def get_users():
     return {"users": DEMO_USERS}
 
 @app.get("/properties")
-def get_properties():
+async def get_properties():
     return {"properties": DEMO_PROPERTIES}
 
 @app.get("/health")
-def health():
+async def health():
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
@@ -71,8 +71,13 @@ def health():
     }
 
 @app.get("/test")
-def test():
+async def test():
     return {"message": "Test endpoint working!", "status": "success"}
 
-# Vercel serverless function handler
-handler = app 
+# Vercel handler - this is the key fix!
+handler = app
+
+# For local development
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000) 
