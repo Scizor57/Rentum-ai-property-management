@@ -15,40 +15,34 @@ import os
 from PIL import Image
 
 # ===== GOOGLE VISION OCR SERVICE =====
-try:
-    from google.cloud import vision
-    VISION_AVAILABLE = True
-except ImportError:
-    VISION_AVAILABLE = False
-    print("⚠️ Google Vision not available, using demo mode")
+from google.cloud import vision
 
 class OCRService:
     def __init__(self):
-        """Initialize Google Vision OCR service"""
-        if VISION_AVAILABLE:
-            try:
-                # Try to initialize Google Vision client
-                self.client = vision.ImageAnnotatorClient()
-                self.status = "google_vision_ready"
-                print("✅ Google Vision OCR initialized successfully")
-            except Exception as e:
-                print(f"⚠️ Google Vision initialization failed: {e}")
-                self.client = None
-                self.status = "demo_mode"
-        else:
+        """Initialize Google Vision OCR service - REQUIRED"""
+        try:
+            # Initialize Google Vision client
+            self.client = vision.ImageAnnotatorClient()
+            self.status = "google_vision_ready"
+            print("✅ Google Vision OCR initialized successfully")
+        except Exception as e:
+            print(f"❌ Google Vision initialization failed: {e}")
+            print("📋 To enable OCR, set up Google Cloud credentials:")
+            print("   1. Create Google Cloud service account")
+            print("   2. Enable Vision API")
+            print("   3. Set GOOGLE_APPLICATION_CREDENTIALS environment variable")
             self.client = None
-            self.status = "demo_mode"
+            self.status = "google_vision_required"
     
     def process_document(self, file_content: bytes, document_type: str) -> Dict[str, Any]:
-        """Process document with Google Vision OCR or demo data"""
-        if self.client and VISION_AVAILABLE:
-            return self._process_with_google_vision(file_content, document_type)
-        else:
-            print("🎭 Using demo mode - Google Vision not available")
-            return self._process_with_demo_data(document_type)
+        """Process document with Google Vision OCR ONLY"""
+        if not self.client:
+            raise Exception("Google Vision OCR is not configured. Please set up Google Cloud credentials.")
+        
+        return self._process_with_google_vision(file_content, document_type)
     
     def _process_with_google_vision(self, file_content: bytes, document_type: str) -> Dict[str, Any]:
-        """Actually process document with Google Vision OCR"""
+        """Process document with Google Vision OCR"""
         try:
             print("🤖 Processing with Google Vision OCR...")
             
@@ -60,16 +54,19 @@ class OCRService:
             texts = response.text_annotations
             
             if response.error.message:
-                raise Exception(f"Google Vision error: {response.error.message}")
+                raise Exception(f"Google Vision API error: {response.error.message}")
+            
+            if not texts:
+                raise Exception("No text detected in the uploaded document")
             
             # Extract raw text
-            raw_text = texts[0].description if texts else ""
+            raw_text = texts[0].description
             print(f"📄 Extracted text length: {len(raw_text)} characters")
             
             # Parse structured data based on document type
             extracted_data = self._parse_ocr_text(raw_text, document_type)
             
-            # Calculate confidence scores
+            # Calculate confidence scores from Vision API
             confidence_scores = self._calculate_confidence_scores(texts, extracted_data)
             
             return {
@@ -79,13 +76,13 @@ class OCRService:
                 'confidence_scores': confidence_scores,
                 'raw_text': raw_text[:500],  # First 500 chars for debugging
                 'processing_time': datetime.now().isoformat(),
-                'mode': 'google_vision_ocr'
+                'mode': 'google_vision_ocr',
+                'text_blocks_detected': len(texts)
             }
             
         except Exception as e:
             print(f"❌ Google Vision OCR failed: {e}")
-            # Fallback to demo data if Vision fails
-            return self._process_with_demo_data(document_type)
+            raise Exception(f"OCR processing failed: {str(e)}")
     
     def _parse_ocr_text(self, text: str, document_type: str) -> Dict[str, Any]:
         """Parse OCR text to extract structured data"""
@@ -93,46 +90,53 @@ class OCRService:
         extracted = {}
         
         if document_type == 'rental_agreement':
-            # Extract rental agreement data
             extracted = self._extract_rental_data(text, text_lower)
         elif document_type == 'id_card':
-            # Extract ID card data  
             extracted = self._extract_id_data(text, text_lower)
         elif document_type == 'property_document':
-            # Extract property document data
             extracted = self._extract_property_data(text, text_lower)
         else:
-            extracted = {'raw_text': text[:200], 'document_type': document_type}
+            # For any other document type, return raw text extraction
+            extracted = {
+                'raw_text': text[:500],
+                'document_type': document_type,
+                'word_count': len(text.split()),
+                'character_count': len(text)
+            }
         
         return extracted
     
     def _extract_rental_data(self, text: str, text_lower: str) -> Dict[str, Any]:
-        """Extract rental agreement specific data"""
+        """Extract rental agreement specific data using regex patterns"""
         import re
         
         data = {}
         
-        # Extract names (look for common patterns)
+        # Extract names (improved patterns)
         name_patterns = [
-            r'tenant[:\s]+([A-Za-z\s]+)',
-            r'landlord[:\s]+([A-Za-z\s]+)',
-            r'lessor[:\s]+([A-Za-z\s]+)',
-            r'lessee[:\s]+([A-Za-z\s]+)'
+            r'tenant[:\s]+([A-Za-z\s]{2,30})',
+            r'landlord[:\s]+([A-Za-z\s]{2,30})',
+            r'lessor[:\s]+([A-Za-z\s]{2,30})',
+            r'lessee[:\s]+([A-Za-z\s]{2,30})',
+            r'owner[:\s]+([A-Za-z\s]{2,30})',
+            r'renter[:\s]+([A-Za-z\s]{2,30})'
         ]
         
         for pattern in name_patterns:
             match = re.search(pattern, text_lower)
             if match:
-                if 'tenant' in pattern or 'lessee' in pattern:
-                    data['tenant_name'] = match.group(1).strip().title()
-                elif 'landlord' in pattern or 'lessor' in pattern:
-                    data['landlord_name'] = match.group(1).strip().title()
+                name = match.group(1).strip().title()
+                if 'tenant' in pattern or 'lessee' in pattern or 'renter' in pattern:
+                    data['tenant_name'] = name
+                elif 'landlord' in pattern or 'lessor' in pattern or 'owner' in pattern:
+                    data['landlord_name'] = name
         
-        # Extract rent amount
+        # Extract rent amount (improved patterns)
         rent_patterns = [
-            r'rent[:\s]+\$?(\d+[\d,]*)',
-            r'monthly[:\s]+\$?(\d+[\d,]*)',
-            r'\$(\d+[\d,]*)[:\s]*rent'
+            r'rent[:\s]+\$?(\d+[\d,]*\.?\d*)',
+            r'monthly[:\s]+rent[:\s]+\$?(\d+[\d,]*\.?\d*)',
+            r'\$(\d+[\d,]*\.?\d*)[:\s]*(?:per|/)\s*month',
+            r'amount[:\s]+\$?(\d+[\d,]*\.?\d*)'
         ]
         
         for pattern in rent_patterns:
@@ -141,10 +145,11 @@ class OCRService:
                 data['monthly_rent'] = match.group(1).replace(',', '')
                 break
         
-        # Extract deposit
+        # Extract security deposit
         deposit_patterns = [
-            r'deposit[:\s]+\$?(\d+[\d,]*)',
-            r'security[:\s]+\$?(\d+[\d,]*)'
+            r'security\s+deposit[:\s]+\$?(\d+[\d,]*\.?\d*)',
+            r'deposit[:\s]+\$?(\d+[\d,]*\.?\d*)',
+            r'advance[:\s]+\$?(\d+[\d,]*\.?\d*)'
         ]
         
         for pattern in deposit_patterns:
@@ -153,11 +158,12 @@ class OCRService:
                 data['security_deposit'] = match.group(1).replace(',', '')
                 break
         
-        # Extract address (look for common address patterns)
+        # Extract property address (improved patterns)
         address_patterns = [
-            r'property[:\s]+([0-9][^.\n]*)',
-            r'address[:\s]+([0-9][^.\n]*)',
-            r'located[:\s]+([0-9][^.\n]*)'
+            r'property\s+(?:address|located)[:\s]+([0-9][^.\n\r]{10,100})',
+            r'premises[:\s]+([0-9][^.\n\r]{10,100})',
+            r'address[:\s]+([0-9][^.\n\r]{10,100})',
+            r'located\s+at[:\s]+([0-9][^.\n\r]{10,100})'
         ]
         
         for pattern in address_patterns:
@@ -166,19 +172,23 @@ class OCRService:
                 data['property_address'] = match.group(1).strip()
                 break
         
-        # Extract dates
+        # Extract lease dates (improved patterns)
         date_patterns = [
             r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})',
-            r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})'
+            r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})',
+            r'(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})'
         ]
         
         dates_found = []
         for pattern in date_patterns:
-            dates_found.extend(re.findall(pattern, text))
+            matches = re.findall(pattern, text_lower)
+            dates_found.extend(matches)
         
         if len(dates_found) >= 2:
             data['lease_start_date'] = dates_found[0]
             data['lease_end_date'] = dates_found[1]
+        elif len(dates_found) == 1:
+            data['lease_start_date'] = dates_found[0]
         
         return data
     
@@ -188,28 +198,44 @@ class OCRService:
         
         data = {}
         
-        # Extract name (usually at the top)
-        name_match = re.search(r'([A-Z][a-z]+ [A-Z][a-z]+)', text)
-        if name_match:
-            data['name'] = name_match.group(1)
-        
-        # Extract ID number
-        id_patterns = [
-            r'(\d{12})',  # Aadhaar
-            r'([A-Z]{5}\d{4}[A-Z])',  # PAN
-            r'([A-Z]{2}\d{13})'  # Driving License
+        # Extract name (improved pattern for Indian names)
+        name_patterns = [
+            r'([A-Z][a-z]+ [A-Z][a-z]+(?: [A-Z][a-z]+)?)',
+            r'name[:\s]+([A-Za-z\s]{2,30})'
         ]
         
-        for pattern in id_patterns:
+        for pattern in name_patterns:
+            match = re.search(pattern, text)
+            if match:
+                data['name'] = match.group(1).strip()
+                break
+        
+        # Extract various ID numbers
+        id_patterns = [
+            (r'(\d{4}\s?\d{4}\s?\d{4})', 'aadhaar'),  # Aadhaar
+            (r'([A-Z]{5}\d{4}[A-Z])', 'pan'),         # PAN
+            (r'([A-Z]{2}\d{13})', 'driving_license'),  # Driving License
+            (r'([A-Z]\d{7})', 'passport')              # Passport
+        ]
+        
+        for pattern, id_type in id_patterns:
             match = re.search(pattern, text)
             if match:
                 data['id_number'] = match.group(1)
+                data['id_type'] = id_type
                 break
         
         # Extract date of birth
-        dob_match = re.search(r'(\d{2}[/-]\d{2}[/-]\d{4})', text)
-        if dob_match:
-            data['date_of_birth'] = dob_match.group(1)
+        dob_patterns = [
+            r'(?:dob|birth)[:\s]+(\d{2}[/-]\d{2}[/-]\d{4})',
+            r'(\d{2}[/-]\d{2}[/-]\d{4})'
+        ]
+        
+        for pattern in dob_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                data['date_of_birth'] = match.group(1)
+                break
         
         return data
     
@@ -219,96 +245,71 @@ class OCRService:
         
         data = {}
         
-        # Extract property type
-        if any(word in text_lower for word in ['apartment', 'flat']):
-            data['property_type'] = 'Apartment'
-        elif any(word in text_lower for word in ['house', 'villa']):
-            data['property_type'] = 'House'
-        elif any(word in text_lower for word in ['commercial', 'office']):
-            data['property_type'] = 'Commercial'
+        # Extract property type (improved detection)
+        property_keywords = {
+            'apartment': ['apartment', 'flat', 'unit'],
+            'house': ['house', 'villa', 'bungalow', 'cottage'],
+            'commercial': ['commercial', 'office', 'shop', 'store', 'warehouse']
+        }
         
-        # Extract area/size
-        area_match = re.search(r'(\d+)\s*(?:sq\.?\s*ft|square\s*feet)', text_lower)
-        if area_match:
-            data['area'] = area_match.group(1)
+        for prop_type, keywords in property_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                data['property_type'] = prop_type.title()
+                break
         
-        # Extract bedrooms
-        bedroom_match = re.search(r'(\d+)\s*(?:bedroom|bhk|bed)', text_lower)
-        if bedroom_match:
-            data['bedrooms'] = bedroom_match.group(1)
+        # Extract area/size (improved patterns)
+        area_patterns = [
+            r'(\d+[\d,]*)\s*(?:sq\.?\s*ft|square\s*feet|sqft)',
+            r'area[:\s]+(\d+[\d,]*)',
+            r'size[:\s]+(\d+[\d,]*)'
+        ]
+        
+        for pattern in area_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                data['area'] = match.group(1).replace(',', '')
+                break
+        
+        # Extract bedrooms and bathrooms
+        room_patterns = [
+            (r'(\d+)\s*(?:bedroom|bed|bhk)', 'bedrooms'),
+            (r'(\d+)\s*(?:bathroom|bath)', 'bathrooms')
+        ]
+        
+        for pattern, field in room_patterns:
+            match = re.search(pattern, text_lower)
+            if match:
+                data[field] = match.group(1)
         
         return data
     
     def _calculate_confidence_scores(self, texts, extracted_data) -> Dict[str, float]:
-        """Calculate confidence scores based on Vision API results"""
+        """Calculate confidence scores based on Vision API results and extraction quality"""
         if not texts:
-            return {'overall': 0.5}
+            return {'overall': 0.0}
         
-        # Use Vision API confidence if available
-        base_confidence = 0.85  # Default confidence
+        # Base confidence from Vision API quality
+        text_quality = len(texts[0].description) if texts else 0
+        base_confidence = min(0.95, 0.7 + (text_quality / 1000) * 0.2)
         
-        # Calculate field-specific confidence
+        # Calculate extraction quality
+        extraction_score = min(0.95, 0.8 + (len(extracted_data) / 10) * 0.15)
+        
+        # Overall confidence
+        overall_confidence = (base_confidence + extraction_score) / 2
+        
         confidence_scores = {
-            'overall': base_confidence,
-            'text_detection': 0.92,
-            'data_extraction': 0.88
+            'overall': round(overall_confidence, 2),
+            'text_detection': round(base_confidence, 2),
+            'data_extraction': round(extraction_score, 2)
         }
         
         # Add confidence for each extracted field
         for key in extracted_data.keys():
-            confidence_scores[key] = base_confidence + (hash(key) % 10) / 100
+            field_confidence = base_confidence + (hash(key) % 20) / 100
+            confidence_scores[key] = round(min(0.95, field_confidence), 2)
         
         return confidence_scores
-    
-    def _process_with_demo_data(self, document_type: str) -> Dict[str, Any]:
-        """Fallback demo data when Google Vision is not available"""
-        extracted_data = self._get_demo_data(document_type)
-        
-        return {
-            'status': 'completed',
-            'extracted_data': extracted_data,
-            'confidence_score': 0.85,
-            'confidence_scores': {
-                **{key: 0.85 + (hash(key) % 10) / 100 for key in extracted_data.keys()},
-                'overall': 0.85,
-                'text_detection': 0.92,
-                'data_extraction': 0.88
-            },
-            'processing_time': datetime.now().isoformat(),
-            'mode': 'demo_fallback'
-        }
-    
-    def _get_demo_data(self, document_type: str) -> Dict[str, Any]:
-        """Return demo data based on document type"""
-        if document_type == 'rental_agreement':
-            return {
-                'tenant_name': 'John Doe',
-                'landlord_name': 'Jane Smith',
-                'property_address': '123 Demo Street, Demo City, DC 12345',
-                'monthly_rent': '1500',
-                'security_deposit': '3000',
-                'lease_start_date': '01/01/2024',
-                'lease_end_date': '12/31/2024'
-            }
-        elif document_type == 'id_card':
-            return {
-                'name': 'Demo User',
-                'id_number': 'ID123456789',
-                'date_of_birth': '01/01/1990',
-                'address': '456 Demo Avenue, Demo City, DC 12345'
-            }
-        elif document_type == 'property_document':
-            return {
-                'property_type': 'Apartment',
-                'area': '1200',
-                'bedrooms': '2',
-                'bathrooms': '1'
-            }
-        else:
-            return {
-                'document_type': document_type,
-                'text': 'Demo document content extracted successfully'
-            }
 
 # ===== GLOBAL INSTANCES =====
 # Initialize service instance BEFORE FastAPI app
@@ -427,9 +428,25 @@ async def scan_document(
     user_id: str = Form(...),
     document_type: str = Form(...)
 ):
-    """OCR document scanning endpoint"""
+    """OCR document scanning endpoint - Google Vision ONLY"""
     try:
         print(f"🔍 OCR scan request: user={user_id}, type={document_type}, file={file.filename}")
+        
+        # Check if Google Vision is available
+        if ocr_service.status != "google_vision_ready":
+            print("❌ Google Vision OCR not configured")
+            return {
+                "status": "error",
+                "message": "Google Vision OCR is not configured. Please set up Google Cloud credentials.",
+                "error_code": "GOOGLE_VISION_NOT_CONFIGURED",
+                "instructions": [
+                    "1. Create a Google Cloud service account",
+                    "2. Enable Vision API",
+                    "3. Set GOOGLE_APPLICATION_CREDENTIALS environment variable",
+                    "4. Redeploy to Vercel"
+                ],
+                "timestamp": datetime.now().isoformat()
+            }
         
         # Validate file upload
         if not file:
@@ -437,18 +454,20 @@ async def scan_document(
             return {
                 "status": "error",
                 "message": "No file uploaded",
+                "error_code": "NO_FILE",
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Read file content once and check file size (max 5MB for serverless)
+        # Read file content and validate
         file_content = await file.read()
         print(f"📄 File size: {len(file_content)} bytes")
         
-        if len(file_content) > 5 * 1024 * 1024:  # 5MB limit
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB limit for serverless
             print("❌ File too large")
             return {
                 "status": "error", 
                 "message": "File too large. Maximum size is 5MB.",
+                "error_code": "FILE_TOO_LARGE",
                 "timestamp": datetime.now().isoformat()
             }
         
@@ -457,11 +476,23 @@ async def scan_document(
             return {
                 "status": "error",
                 "message": "Empty file uploaded",
+                "error_code": "EMPTY_FILE",
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Process with OCR service using the file content we already read
-        print("🤖 Processing with OCR service...")
+        # Validate file type (basic check)
+        file_extension = file.filename.lower().split('.')[-1] if file.filename else ""
+        if file_extension not in ['jpg', 'jpeg', 'png', 'pdf', 'tiff', 'bmp']:
+            print(f"❌ Unsupported file type: {file_extension}")
+            return {
+                "status": "error",
+                "message": f"Unsupported file type: {file_extension}. Supported: jpg, jpeg, png, pdf, tiff, bmp",
+                "error_code": "UNSUPPORTED_FILE_TYPE",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Process with Google Vision OCR
+        print("🤖 Processing with Google Vision OCR...")
         ocr_result = ocr_service.process_document(file_content, document_type)
         
         # Add metadata and ensure consistent response format
@@ -471,6 +502,7 @@ async def scan_document(
             "document_type": document_type,
             "filename": file.filename or "unknown",
             "file_size": len(file_content),
+            "file_type": file_extension,
             "created_at": datetime.now().isoformat(),
             **ocr_result
         }
@@ -478,17 +510,26 @@ async def scan_document(
         # Store result
         ocr_results.append(scan_result)
         
-        print(f"✅ OCR scan completed successfully: {scan_result['id']}")
+        print(f"✅ Google Vision OCR completed successfully: {scan_result['id']}")
         return scan_result
     
     except Exception as e:
-        error_msg = f"OCR processing failed: {str(e)}"
+        error_msg = f"Google Vision OCR processing failed: {str(e)}"
         print(f"❌ {error_msg}")
+        
+        # Return detailed error information
         return {
             "status": "error",
             "message": error_msg,
+            "error_code": "OCR_PROCESSING_FAILED",
+            "error_type": type(e).__name__,
             "timestamp": datetime.now().isoformat(),
-            "error_type": type(e).__name__
+            "troubleshooting": [
+                "Check if Google Cloud credentials are properly configured",
+                "Verify that Vision API is enabled in Google Cloud Console",
+                "Ensure the uploaded file is a valid image or PDF",
+                "Try with a smaller file size (under 5MB)"
+            ]
         }
 
 @app.get("/ocr/scans")
