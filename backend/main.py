@@ -9,15 +9,27 @@ from datetime import datetime, timedelta
 import json
 import shutil
 from pathlib import Path
+import asyncio
 
 # Import our new services
 from ocr_service import ocr_service
 from ai_review_service import ai_review_analyzer
 
-load_dotenv()
+# Load .env file only if it exists (for local development)
+# Vercel will inject environment variables directly
+if os.path.exists('.env'):
+    load_dotenv()
+    print("📄 Loaded .env file for local development")
+else:
+    print("☁️ Running in production mode (Vercel) - using injected environment variables")
 
-# Supabase database URL format: postgresql://postgres:[password]@[host]:5432/postgres
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/rentum_db")
+# Database configuration
+# Priority: Environment variable > Default fallback
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    print("⚠️  No DATABASE_URL found in environment variables")
+    print("💡 Please set DATABASE_URL in your .env file (local) or Vercel environment variables (production)")
+    DATABASE_URL = "postgresql://postgres:password@localhost:5432/rentum_db"  # Fallback for development
 
 app = FastAPI()
 
@@ -293,23 +305,48 @@ class UserProfileOut(BaseModel):
 
 @app.on_event("startup")
 async def startup():
-    try:
-        app.state.db = await asyncpg.create_pool(DATABASE_URL)
-        print("✅ Connected to database successfully!")
-        
-        # Test the connection
-        async with app.state.db.acquire() as connection:
-            result = await connection.fetchval("SELECT 1")
-            print(f"✅ Database test query successful: {result}")
+    """Initialize database connection with proper timeout and error handling"""
+    print("🚀 Starting Rentum AI backend...")
+    
+    # Only try to connect to database if URL is provided and not None
+    if DATABASE_URL and DATABASE_URL != "None":
+        try:
+            print(f"🔌 Attempting to connect to database...")
+            # Create connection pool with proper timeout settings
+            app.state.db = await asyncpg.create_pool(
+                DATABASE_URL,
+                min_size=1,
+                max_size=5,
+                timeout=10.0,  # Connection timeout
+                command_timeout=30.0  # Query timeout
+            )
+            print("✅ Database connection pool created successfully!")
             
-    except Exception as e:
-        print(f"❌ Database connection failed: {e}")
-        print("⚠️ Please check your DATABASE_URL in .env file")
-        print("🔄 Falling back to in-memory storage...")
+            # Test the connection
+            async with app.state.db.acquire() as connection:
+                result = await connection.fetchval("SELECT 1")
+                print(f"✅ Database test query successful: {result}")
+                
+        except asyncio.TimeoutError:
+            print("⏰ Database connection timed out")
+            print("💡 This is normal for Supabase free tier with cold starts")
+            print("🔄 Continuing with in-memory fallback...")
+            app.state.db = None
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            print("💡 Common solutions:")
+            print("   - Check your DATABASE_URL in environment variables")
+            print("   - Ensure Supabase project is active (not paused)")
+            print("   - Verify network connectivity")
+            print("🔄 Continuing with in-memory fallback...")
+            app.state.db = None
+    else:
+        print("📝 No DATABASE_URL provided, using in-memory storage")
         app.state.db = None
     
-    # Create demo users for testing
+    # Create demo users for testing regardless of database status
     await create_demo_data()
+    print("🎉 Backend startup complete!")
 
 async def create_demo_data():
     """Create demo users and sample data for testing"""
@@ -582,7 +619,7 @@ async def create_agreement(agreement: AgreementCreate):
             async with app.state.db.acquire() as connection:
                 current_time = datetime.now()
                 new_agreement["created_at"] = current_time.isoformat()
-                await connection.execute("INSERT INTO agreements (id, property_id, landlord_id, tenant_id, start_date, end_date, rent, deposit, clauses, document_url, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                await connection.execute("INSERT INTO agreements (id, property_id, landlord_id, tenant_id, start_date, end_date, rent, deposit, clauses, document_url, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (id) DO NOTHING",
                                         new_agreement["id"], new_agreement["property_id"], new_agreement["landlord_id"], new_agreement["tenant_id"], new_agreement["start_date"], new_agreement["end_date"], new_agreement["rent"], new_agreement["deposit"], new_agreement["clauses"], new_agreement["document_url"], new_agreement["status"], current_time)
         except Exception as e:
             print(f"Database error, using in-memory: {e}")

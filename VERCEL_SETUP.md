@@ -1,234 +1,153 @@
-# 🚀 Vercel Deployment Guide - Rentum AI
+# 🚀 Vercel Deployment Guide for Rentum AI
 
-## 📋 **Prerequisites**
+## Quick Overview
+Rentum AI is deployed as two separate Vercel projects:
+- **Frontend**: React app (`/frontend` folder)  
+- **Backend**: FastAPI app (`/backend` folder)
 
-1. ✅ Google Cloud Vision API setup completed
-2. ✅ GitHub repository with your code
-3. ✅ Vercel account ([vercel.com](https://vercel.com))
+## 📋 Prerequisites Setup
 
----
+### 1. Get Your Supabase Database URL
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project (or create new one)
+3. Go to **Settings** → **Database**  
+4. Copy the **Connection string** (URI format)
+5. It looks like: `postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres`
 
-## 🔑 **Step 1: Get Google Cloud Credentials**
-
-### Get Your Service Account JSON:
+### 2. Get Your Google Cloud Vision API Credentials
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Navigate to **IAM & Admin** → **Service Accounts**
-3. Find your service account → **Keys** tab
-4. Download your JSON key file
-5. **Copy the entire JSON content** (you'll need this for Vercel)
+2. Create/select project
+3. Enable **Vision API**
+4. Go to **IAM & Admin** → **Service Accounts**
+5. Create service account with Vision API permissions
+6. Download JSON key file
+7. Copy these values from the JSON:
+   - `project_id`
+   - `private_key_id`
+   - `private_key` (full key including `-----BEGIN PRIVATE KEY-----`)
+   - `client_email`
+   - `client_id`
 
----
+## 🔧 Vercel Environment Variables Setup
 
-## 🌐 **Step 2: Deploy to Vercel**
+### Backend Environment Variables
+Go to **Vercel Dashboard** → **Your Backend Project** → **Settings** → **Environment Variables**
 
-### Method A: Simple JSON Environment Variable (Recommended)
+Add these variables:
 
-1. **Connect Repository**:
-   - Go to [vercel.com/dashboard](https://vercel.com/dashboard)
-   - Click **"Add New Project"**
-   - Import your GitHub repository
+| Variable Name | Value | Example |
+|---------------|-------|---------|
+| `DATABASE_URL` | Your Supabase connection string | `postgresql://postgres:your_password@db.abc123.supabase.co:5432/postgres` |
+| `GOOGLE_CLOUD_PROJECT_ID` | Your Google Cloud project ID | `rentum-ai-123456` |
+| `GOOGLE_CLOUD_PRIVATE_KEY_ID` | Private key ID from JSON | `a1b2c3d4e5f6...` |
+| `GOOGLE_CLOUD_PRIVATE_KEY` | Full private key (with \n) | `-----BEGIN PRIVATE KEY-----\nMII...` |
+| `GOOGLE_CLOUD_CLIENT_EMAIL` | Service account email | `vision-api@rentum-ai.iam.gserviceaccount.com` |
+| `GOOGLE_CLOUD_CLIENT_ID` | Client ID from JSON | `123456789012345678901` |
 
-2. **Set Environment Variables**:
-   - In project settings → **Environment Variables**
-   - Add this variable:
+### Frontend Environment Variables
+Go to **Vercel Dashboard** → **Your Frontend Project** → **Settings** → **Environment Variables**
 
-   ```bash
-   Variable Name: GOOGLE_CREDENTIALS_JSON
-   Value: {paste your entire JSON here}
-   ```
+Add these variables:
 
-   **Example**:
-   ```json
-   {
-     "type": "service_account",
-     "project_id": "your-project-id",
-     "private_key_id": "your-key-id",
-     "private_key": "-----BEGIN PRIVATE KEY-----\nYour\nPrivate\nKey\n-----END PRIVATE KEY-----\n",
-     "client_email": "your-service@your-project.iam.gserviceaccount.com",
-     "client_id": "your-client-id",
-     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-     "token_uri": "https://oauth2.googleapis.com/token"
-   }
-   ```
+| Variable Name | Value | Example |
+|---------------|-------|---------|
+| `REACT_APP_API_URL` | Your backend Vercel URL | `https://rentum-backend.vercel.app` |
 
-3. **Deploy**:
-   - Click **Deploy**
-   - Vercel will automatically build and deploy your app
+## 🎯 Deployment Steps
 
-### Method B: Individual Environment Variables (Alternative)
+### Step 1: Deploy Backend
+1. **Create new Vercel project** for backend
+2. **Connect to GitHub** repository  
+3. **Set Root Directory** to `backend`
+4. **Set Build Command** to `pip install -r requirements.txt`
+5. **Add all environment variables** (see table above)
+6. **Deploy**
 
-If you prefer to split the credentials:
+### Step 2: Deploy Frontend  
+1. **Create new Vercel project** for frontend
+2. **Connect to same GitHub** repository
+3. **Set Root Directory** to `frontend`
+4. **Add environment variables** (see table above)
+5. **Deploy**
 
+### Step 3: Update CORS
+After both are deployed, update backend CORS in `main.py`:
+```python
+allow_origins=[
+    "https://your-frontend.vercel.app",  # Add your actual frontend URL
+    "https://*.vercel.app",
+    "*"  # Remove this in production
+]
+```
+
+## 🔍 Testing Your Deployment
+
+### Test Backend
+Visit: `https://your-backend.vercel.app/`
+Should see: `{"message": "Rentum AI backend is running!", "database": "connected"}`
+
+Visit: `https://your-backend.vercel.app/demo`
+Should see demo users list
+
+### Test Frontend
+Visit: `https://your-frontend.vercel.app/`
+Should load the Rentum AI app
+
+### Test Full Integration
+1. Upload a document through frontend
+2. Check if OCR processing works
+3. Verify database connections
+
+## 🐛 Troubleshooting
+
+### Backend Issues
+
+**"404: NOT_FOUND"**
+- Check that Root Directory is set to `backend`
+- Verify `vercel.json` is in backend folder
+
+**Database Connection Failed**
+- Verify DATABASE_URL in environment variables
+- Check Supabase project is active (not paused)
+- Test connection string format
+
+**OCR Not Working**
+- Check all Google Cloud environment variables are set
+- Verify private key format (should include `\n` characters)
+- Test Google Cloud Vision API is enabled
+
+### Frontend Issues
+
+**API Calls Failing**
+- Check REACT_APP_API_URL points to backend
+- Verify CORS settings in backend
+- Check browser network tab for errors
+
+## 📱 Environment Variables Summary
+
+### For Local Development (.env file):
 ```bash
-GOOGLE_CLOUD_PROJECT_ID=your-project-id
-GOOGLE_CLOUD_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nYour\nPrivate\nKey\n-----END PRIVATE KEY-----\n
-GOOGLE_CLOUD_CLIENT_EMAIL=your-service@your-project.iam.gserviceaccount.com
-GOOGLE_CLOUD_CLIENT_ID=your-client-id
+# Backend .env
+DATABASE_URL=postgresql://postgres:your_password@db.your_project.supabase.co:5432/postgres
+GOOGLE_APPLICATION_CREDENTIALS=./google-cloud-credentials.json
+
+# Frontend .env  
+REACT_APP_API_URL=http://localhost:8000
 ```
 
----
+### For Vercel (Dashboard Settings):
+- **Backend**: DATABASE_URL + 5 Google Cloud variables
+- **Frontend**: REACT_APP_API_URL
 
-## 📁 **Step 3: Project Structure for Vercel**
+## 🎉 Success!
+Once deployed, your Rentum AI app will be live with:
+- ✅ Supabase database connected
+- ✅ Google Cloud Vision OCR working  
+- ✅ Full AI review system operational
+- ✅ Professional deployment setup
 
-Make sure your project structure is:
+Your app URLs:
+- **Frontend**: `https://your-frontend.vercel.app`
+- **Backend**: `https://your-backend.vercel.app`
 
-```
-📦 Your Repository
-├── 📁 backend/              # FastAPI backend
-│   ├── main.py
-│   ├── ocr_service.py
-│   ├── requirements.txt
-│   └── vercel.json         # (we'll create this)
-├── 📁 frontend/            # React frontend  
-│   ├── src/
-│   ├── package.json
-│   └── vercel.json         # (we'll create this)
-└── 📄 README.md
-```
-
----
-
-## ⚙️ **Step 4: Create Vercel Configuration**
-
-### Backend Vercel Config (`backend/vercel.json`):
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "main.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/main.py"
-    }
-  ],
-  "env": {
-    "PYTHONPATH": "/var/task"
-  }
-}
-```
-
-### Frontend Vercel Config (`frontend/vercel.json`):
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
-}
-```
-
----
-
-## 🔄 **Step 5: Update API URLs**
-
-In your React app, update the API URL for production:
-
-### `frontend/src/App.js` (add this at the top):
-```javascript
-// Update API URL for production
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-backend-url.vercel.app'  // Replace with your actual backend URL
-  : 'http://localhost:8000';
-
-// Use API_URL instead of hardcoded localhost
-const response = await fetch(`${API_URL}/ocr/scan`, {
-  // your fetch options
-});
-```
-
----
-
-## 🧪 **Step 6: Test Deployment**
-
-1. **Deploy Backend First**:
-   - Create separate Vercel project for backend
-   - Set `GOOGLE_CREDENTIALS_JSON` environment variable
-   - Test: `https://your-backend.vercel.app/` should return success
-
-2. **Deploy Frontend**:
-   - Create separate Vercel project for frontend
-   - Update API_URL to point to your backend
-   - Test: Upload a document and verify OCR works
-
----
-
-## 🛠️ **Troubleshooting**
-
-### Common Issues:
-
-1. **"Google Vision setup failed"**:
-   - Check environment variable name: `GOOGLE_CREDENTIALS_JSON`
-   - Ensure JSON is valid (use JSON validator)
-   - Verify Google Cloud Vision API is enabled
-
-2. **"Module not found"**:
-   - Ensure `requirements.txt` includes `google-cloud-vision==3.4.5`
-   - Check `vercel.json` configuration
-
-3. **CORS Errors**:
-   - Update FastAPI CORS settings to include your frontend domain
-   - In `main.py`: Add your Vercel URL to `allow_origins`
-
-### Debug Commands:
-```bash
-# Test locally with environment variable
-export GOOGLE_CREDENTIALS_JSON='{"type":"service_account",...}'
-python -c "from ocr_service import ocr_service; print('✅ OCR working!')"
-```
-
----
-
-## 🔒 **Security Notes**
-
-- ✅ Credentials stored securely in Vercel environment variables
-- ✅ Never commit `google-credentials.json` to Git
-- ✅ Environment variables are encrypted in Vercel
-- ✅ Use different service accounts for staging/production
-
----
-
-## 💰 **Cost Estimation**
-
-- **Vercel**: Free tier (sufficient for demos)
-- **Google Vision**: $1.50 per 1,000 OCR requests
-- **Storage**: Vercel includes file storage
-
----
-
-## 🚀 **Final Deployment Commands**
-
-```bash
-# 1. Push to GitHub
-git add .
-git commit -m "Add Google Cloud Vision OCR"
-git push origin main
-
-# 2. Deploy on Vercel
-# - Go to vercel.com/dashboard
-# - Import GitHub repository
-# - Add GOOGLE_CREDENTIALS_JSON environment variable
-# - Deploy!
-```
-
-**Your app will be live at: `https://your-app.vercel.app`** 🎉 
+Need help? The backend provides detailed error messages and setup instructions at startup! 
