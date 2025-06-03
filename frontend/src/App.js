@@ -27,6 +27,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('users');
   const [darkMode, setDarkMode] = useState(false);
   
+  // Connection status
+  const [apiConnected, setApiConnected] = useState(null);
+  
   // User authentication simulation
   const [currentUser, setCurrentUser] = useState(null);
   const [loginForm, setLoginForm] = useState({ email: '', role: 'tenant' });
@@ -93,6 +96,7 @@ function App() {
   // Fetch users and other data
   useEffect(() => {
     const fetchData = async () => {
+      console.log('🔄 Starting data fetch from API:', API_BASE);
       try {
         const [usersRes, propertiesRes, agreementsRes, documentsRes, paymentsRes, issuesRes, notificationsRes, chatRes, reviewRequestsRes, reviewResponsesRes] = await Promise.all([
           fetch(`${API_BASE}/users`),
@@ -107,27 +111,93 @@ function App() {
           fetch(`${API_BASE}/reviews/responses`)
         ]);
 
-        if (usersRes.ok) setUsers(await usersRes.json());
+        console.log('📊 API Response Status:', {
+          users: usersRes.status,
+          properties: propertiesRes.status,
+          agreements: agreementsRes.status
+        });
+
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          console.log('✅ Users loaded:', usersData.length, 'users');
+          setUsers(usersData);
+          setApiConnected(true);
+        } else {
+          console.warn('⚠️ Users API failed, loading fallback demo data');
+          setApiConnected(false);
+          setUsers([
+            { id: 1, name: 'John Tenant', email: 'tenant@demo.com', role: 'tenant', created_at: new Date().toISOString() },
+            { id: 2, name: 'Jane Landlord', email: 'landlord@demo.com', role: 'landlord', created_at: new Date().toISOString() },
+            { id: 3, name: 'ABC Company', email: 'company@demo.com', role: 'company', created_at: new Date().toISOString() }
+          ]);
+        }
+
         if (propertiesRes.ok) setProperties(await propertiesRes.json());
+        else setProperties([
+          { id: 1, owner_id: 1, address: '123 Demo Street, Demo City', status: 'active', created_at: new Date().toISOString() }
+        ]);
+        
         if (agreementsRes.ok) setAgreements(await agreementsRes.json());
+        else setAgreements([
+          { id: 1, property_id: 1, landlord_id: 2, tenant_id: 1, start_date: '2024-01-01', end_date: '2024-12-31', rent: '1500', deposit: '3000' }
+        ]);
+        
         if (documentsRes.ok) setDocuments(await documentsRes.json());
+        else setDocuments([]);
+        
         if (paymentsRes.ok) setPayments(await paymentsRes.json());
+        else setPayments([
+          { id: 1, user_id: 1, property_id: 1, amount: '1500', payment_type: 'rent', created_at: new Date().toISOString() }
+        ]);
+        
         if (issuesRes.ok) setIssues(await issuesRes.json());
+        else setIssues([
+          { id: 1, property_id: 1, raised_by: 1, details: 'Demo issue: Kitchen faucet leaking', status: 'open', created_at: new Date().toISOString() }
+        ]);
+        
         if (notificationsRes.ok) setNotifications(await notificationsRes.json());
+        else setNotifications([
+          { id: 1, recipient_id: 1, notif_type: 'payment_due', content: 'Rent payment due on 1st of next month', created_at: new Date().toISOString() }
+        ]);
+        
         if (chatRes.ok) setChat(await chatRes.json());
+        else setChat([
+          { id: 1, from_user_id: 1, to_user_id: 2, message: 'Hello! This is a demo message.', property_id: 1, created_at: new Date().toISOString() }
+        ]);
+        
         if (reviewRequestsRes.ok) setReviewRequests(await reviewRequestsRes.json());
+        else setReviewRequests([]);
+        
         if (reviewResponsesRes.ok) setReviewResponses(await reviewResponsesRes.json());
+        else setReviewResponses([]);
       } catch (error) {
-        console.error('Failed to fetch initial data:', error);
-        // Fallback to empty arrays if API fails
-        setUsers([]);
-        setProperties([]);
-        setAgreements([]);
+        console.error('❌ Failed to fetch initial data:', error);
+        setApiConnected(false);
+        // Fallback to demo data if API completely fails
+        setUsers([
+          { id: 1, name: 'John Tenant', email: 'tenant@demo.com', role: 'tenant', created_at: new Date().toISOString() },
+          { id: 2, name: 'Jane Landlord', email: 'landlord@demo.com', role: 'landlord', created_at: new Date().toISOString() },
+          { id: 3, name: 'ABC Company', email: 'company@demo.com', role: 'company', created_at: new Date().toISOString() }
+        ]);
+        setProperties([
+          { id: 1, owner_id: 1, address: '123 Demo Street, Demo City', status: 'active', created_at: new Date().toISOString() }
+        ]);
+        setAgreements([
+          { id: 1, property_id: 1, landlord_id: 2, tenant_id: 1, start_date: '2024-01-01', end_date: '2024-12-31', rent: '1500', deposit: '3000' }
+        ]);
         setDocuments([]);
-        setPayments([]);
-        setIssues([]);
-        setNotifications([]);
-        setChat([]);
+        setPayments([
+          { id: 1, user_id: 1, property_id: 1, amount: '1500', payment_type: 'rent', created_at: new Date().toISOString() }
+        ]);
+        setIssues([
+          { id: 1, property_id: 1, raised_by: 1, details: 'Demo issue: Kitchen faucet leaking', status: 'open', created_at: new Date().toISOString() }
+        ]);
+        setNotifications([
+          { id: 1, recipient_id: 1, notif_type: 'payment_due', content: 'Rent payment due on 1st of next month', created_at: new Date().toISOString() }
+        ]);
+        setChat([
+          { id: 1, from_user_id: 1, to_user_id: 2, message: 'Hello! This is a demo message.', property_id: 1, created_at: new Date().toISOString() }
+        ]);
         setReviewRequests([]);
         setReviewResponses([]);
       }
@@ -149,16 +219,41 @@ function App() {
   // Login simulation
   const handleLogin = (e) => {
     e.preventDefault();
-    const user = users.find(u => u.email === loginForm.email && u.role === loginForm.role);
+    console.log('🔐 Attempting login for:', loginForm.email, 'role:', loginForm.role);
+    
+    let user = users.find(u => u.email === loginForm.email && u.role === loginForm.role);
+    
+    // If user not found in loaded users, check against fallback demo users
+    if (!user && loginForm.email.includes('@demo.com')) {
+      const demoUsers = [
+        { id: 1, name: 'John Tenant', email: 'tenant@demo.com', role: 'tenant', created_at: new Date().toISOString() },
+        { id: 2, name: 'Jane Landlord', email: 'landlord@demo.com', role: 'landlord', created_at: new Date().toISOString() },
+        { id: 3, name: 'ABC Company', email: 'company@demo.com', role: 'company', created_at: new Date().toISOString() }
+      ];
+      user = demoUsers.find(u => u.email === loginForm.email && u.role === loginForm.role);
+      console.log('🎯 Using fallback demo user:', user);
+    }
+    
     if (user) {
+      console.log('✅ Login successful for:', user.name);
       setCurrentUser(user);
       setActiveTab('dashboard');
+      
+      // Try to fetch profile, but don't fail if API is down
       fetch(`${API_BASE}/users/${user.id}/profile`)
         .then(res => res.json())
         .then(setUserProfile)
-        .catch(err => console.log('Profile fetch error:', err));
+        .catch(err => {
+          console.log('⚠️ Profile fetch error (non-critical):', err);
+          // Set a basic profile for demo purposes
+          setUserProfile({
+            green_flags_count: { communication: 5, reliability: 4 },
+            red_flags_count: { late_payment: 1 },
+            overall_rating: 4.2
+          });
+        });
     } else {
-      alert('User not found. Please register first or check your role.');
+      alert('User not found. Please use the demo accounts provided or register a new account.');
     }
   };
 
@@ -502,6 +597,7 @@ function App() {
         isRegistering={isRegistering}
         urlParams={urlParams}
         setLoginForm={setLoginForm}
+        apiConnected={apiConnected}
       />
     );
   }
@@ -642,6 +738,11 @@ function App() {
       <div className="header">
         <h1>🏠 Rentum AI Dashboard - {currentUser.role.toUpperCase()}</h1>
         <div className="header-actions">
+          {apiConnected !== null && (
+            <span className={`connection-status ${apiConnected ? 'connected' : 'demo'}`}>
+              {apiConnected ? '🟢 Live Data' : '🟡 Demo Mode'}
+            </span>
+          )}
           <span className="user-greeting">Welcome, {currentUser.name}!</span>
           <button onClick={handleLogout} className="logout-btn">Logout</button>
           <button 

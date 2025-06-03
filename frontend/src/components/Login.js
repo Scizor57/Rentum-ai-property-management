@@ -12,7 +12,8 @@ const Login = ({
   addUser, 
   isRegistering,
   urlParams,
-  setLoginForm 
+  setLoginForm,
+  apiConnected
 }) => {
   return (
     <div className={`App ${darkMode ? 'dark-mode' : ''}`}>
@@ -47,7 +48,13 @@ const Login = ({
           </form>
           
           <div className="demo-accounts">
-            <h3>Demo Accounts (from database):</h3>
+            <h3>Demo Accounts {users.length > 0 ? `(${users.length} found)` : '(Loading...)'}</h3>
+            {users.length === 0 && (
+              <div className="loading-message">
+                <p>🔄 Loading demo accounts from backend...</p>
+                <p><small>If this takes too long, there might be an API connection issue.</small></p>
+              </div>
+            )}
             <div className="demo-list">
               {users.map(user => (
                 <div key={user.id} className="demo-account">
@@ -61,6 +68,31 @@ const Login = ({
                   </button>
                 </div>
               ))}
+              {users.length === 0 && (
+                <div className="fallback-demo">
+                  <p>🚀 <strong>Quick Demo Access:</strong></p>
+                  <div className="demo-account">
+                    <strong>Demo Tenant</strong> (tenant)
+                    <br />Email: tenant@demo.com
+                    <button 
+                      onClick={() => setLoginForm({ email: 'tenant@demo.com', role: 'tenant' })}
+                      className="quick-login"
+                    >
+                      Quick Login
+                    </button>
+                  </div>
+                  <div className="demo-account">
+                    <strong>Demo Landlord</strong> (landlord)
+                    <br />Email: landlord@demo.com
+                    <button 
+                      onClick={() => setLoginForm({ email: 'landlord@demo.com', role: 'landlord' })}
+                      className="quick-login"
+                    >
+                      Quick Login
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
