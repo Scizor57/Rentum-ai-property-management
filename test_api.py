@@ -6,19 +6,18 @@ Simple test to verify API structure for Vercel deployment
 def test_api_structure():
     """Test that the API can be imported and has the right structure"""
     try:
-        # Import the API
-        from api.index import app, handler
+        # Import the API - only need 'app' for ASGI applications
+        from api.index import app
         
         print("✅ Successfully imported FastAPI app")
         print(f"✅ App type: {type(app)}")
-        print(f"✅ Handler type: {type(handler)}")
         
         # Check if app has routes
         routes = [route.path for route in app.routes]
         print(f"✅ Found {len(routes)} routes: {routes}")
         
-        # Test that required routes exist
-        required_routes = ["/", "/demo", "/health", "/test"]
+        # Test that required routes exist - all user-defined endpoints
+        required_routes = ["/", "/demo", "/users", "/properties", "/health", "/test", "/ocr/scan", "/ocr/scans"]
         missing_routes = [route for route in required_routes if route not in routes]
         
         if missing_routes:

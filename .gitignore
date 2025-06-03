@@ -50,4 +50,8 @@ Thumbs.db
 
 # Logs
 *.log
-logs/ 
+logs/
+
+# Backend conflicts (old versions that interfere with Vercel deployment)
+backend/
+backend/** 

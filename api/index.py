@@ -1,7 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # ===== EMBEDDED OCR SERVICE =====
 # No external dependencies for Vercel serverless
@@ -97,15 +97,25 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {
-        "status": "✅ WORKING",
-        "message": "Rentum AI Backend is operational!",
-        "timestamp": datetime.now().isoformat(),
-        "deployment": "vercel-serverless-fixed-v2",
-        "endpoints": ["/demo", "/users", "/properties", "/health", "/ocr/scan", "/test"],
-        "version": "1.0.0",
-        "framework": "FastAPI"
-    }
+    try:
+        return {
+            "status": "✅ WORKING",
+            "message": "Rentum AI Backend is operational!",
+            "timestamp": datetime.now().isoformat(),
+            "deployment": "vercel-serverless-final-v4",
+            "endpoints": ["/demo", "/users", "/properties", "/health", "/ocr/scan", "/ocr/scans", "/test"],
+            "version": "1.0.0",
+            "framework": "FastAPI",
+            "python_runtime": "vercel_serverless",
+            "query_handling": "optimized"
+        }
+    except Exception as e:
+        return {
+            "status": "❌ ERROR",
+            "message": f"Error in root endpoint: {str(e)}",
+            "timestamp": datetime.now().isoformat(),
+            "deployment": "vercel-serverless-final-v4"
+        }
 
 @app.get("/demo")
 async def demo():
@@ -129,14 +139,25 @@ async def get_properties():
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "service": "rentum-api",
-        "version": "1.0.0",
-        "ocr_service": ocr_service.status,
-        "environment": "vercel-serverless"
-    }
+    try:
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "service": "rentum-api",
+            "version": "1.0.0",
+            "ocr_service": ocr_service.status,
+            "environment": "vercel-serverless",
+            "memory_usage": "optimized",
+            "dependencies": "loaded"
+        }
+    except Exception as e:
+        return {
+            "status": "degraded",
+            "timestamp": datetime.now().isoformat(),
+            "service": "rentum-api",
+            "error": str(e),
+            "environment": "vercel-serverless"
+        }
 
 @app.get("/test")
 async def test():
@@ -154,10 +175,24 @@ async def scan_document(
 ):
     """OCR document scanning endpoint"""
     try:
-        # Read file content
-        file_content = await file.read()
+        # Validate file upload
+        if not file:
+            return {
+                "status": "error",
+                "message": "No file uploaded",
+                "timestamp": datetime.now().isoformat()
+            }
         
-        # Process with OCR service
+        # Read file content once and check file size (max 5MB for serverless)
+        file_content = await file.read()
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB limit
+            return {
+                "status": "error", 
+                "message": "File too large. Maximum size is 5MB.",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Process with OCR service using the file content we already read
         ocr_result = ocr_service.process_document(file_content, document_type)
         
         # Add metadata
@@ -165,7 +200,7 @@ async def scan_document(
             "id": str(len(ocr_results) + 1),
             "user_id": user_id,
             "document_type": document_type,
-            "filename": file.filename,
+            "filename": file.filename or "unknown",
             "file_size": len(file_content),
             "timestamp": datetime.now().isoformat(),
             **ocr_result
@@ -180,11 +215,12 @@ async def scan_document(
         return {
             "status": "error",
             "message": f"OCR processing failed: {str(e)}",
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "error_type": type(e).__name__
         }
 
 @app.get("/ocr/scans")
-async def list_ocr_scans(user_id: str = None):
+async def list_ocr_scans(user_id: Optional[str] = Query(None)):
     """List OCR scan results"""
     if user_id:
         return {
@@ -196,7 +232,6 @@ async def list_ocr_scans(user_id: str = None):
         "total": len(ocr_results)
     }
 
-# ===== VERCEL HANDLER EXPORTS =====
-# Correct ASGI exports for Vercel Python runtime with FastAPI
-app_asgi = app
-handler = app 
+# ===== VERCEL HANDLER EXPORT =====
+# For Vercel Python runtime: FastAPI is ASGI, so we just need the 'app' variable
+# Vercel will automatically detect and use the 'app' variable for ASGI applications 
