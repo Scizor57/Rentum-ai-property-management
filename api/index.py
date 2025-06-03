@@ -21,12 +21,49 @@ class OCRService:
     def __init__(self):
         """Initialize Google Vision OCR service - REQUIRED"""
         try:
+            print("🔍 Initializing Google Vision OCR...")
+            
+            # Debug: Check environment variables
+            import os
+            creds_env = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+            creds_base64 = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_BASE64')
+            
+            print(f"📋 GOOGLE_APPLICATION_CREDENTIALS exists: {bool(creds_env)}")
+            print(f"📋 GOOGLE_APPLICATION_CREDENTIALS_BASE64 exists: {bool(creds_base64)}")
+            
+            if creds_env:
+                print(f"📋 Credentials length: {len(creds_env)} characters")
+                print(f"📋 Credentials start: {creds_env[:50]}...")
+                
+                # Check if it's valid JSON
+                try:
+                    import json
+                    parsed = json.loads(creds_env)
+                    print(f"📋 JSON is valid, type: {parsed.get('type', 'unknown')}")
+                    print(f"📋 Project ID: {parsed.get('project_id', 'unknown')}")
+                except json.JSONDecodeError as je:
+                    print(f"❌ JSON parsing failed: {je}")
+                    print(f"📋 First 100 chars: {creds_env[:100]}")
+            
+            if creds_base64 and not creds_env:
+                print("🔧 Decoding base64 credentials...")
+                import base64
+                try:
+                    decoded_creds = base64.b64decode(creds_base64).decode('utf-8')
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = decoded_creds
+                    print("✅ Base64 credentials decoded and set")
+                except Exception as be:
+                    print(f"❌ Base64 decoding failed: {be}")
+            
             # Initialize Google Vision client
             self.client = vision.ImageAnnotatorClient()
             self.status = "google_vision_ready"
             print("✅ Google Vision OCR initialized successfully")
+            
         except Exception as e:
             print(f"❌ Google Vision initialization failed: {e}")
+            print(f"❌ Error type: {type(e).__name__}")
+            print(f"❌ Error details: {str(e)}")
             print("📋 To enable OCR, set up Google Cloud credentials:")
             print("   1. Create Google Cloud service account")
             print("   2. Enable Vision API")
@@ -548,3 +585,18 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
 # ===== VERCEL ASGI EXPORT =====
 # Simple ASGI application export for Vercel
 # Vercel will automatically detect the 'app' variable 
+
+# Vercel handler function - REQUIRED for Vercel deployment
+def handler(request, response):
+    """Vercel serverless function handler"""
+    return app
+
+# ASGI application for Vercel
+# This allows Vercel to properly route requests to FastAPI
+from mangum import Adapter
+
+# Wrap FastAPI app with Mangum adapter for serverless deployment
+handler = Adapter(app)
+
+# Export for Vercel (both 'app' and 'handler' for compatibility)
+__all__ = ["app", "handler"] 
