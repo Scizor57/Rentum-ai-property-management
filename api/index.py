@@ -20,13 +20,17 @@ class OCRService:
     
     def process_document(self, file_content: bytes, document_type: str) -> Dict[str, Any]:
         """Process document - returns demo data for Vercel deployment"""
+        extracted_data = self._get_demo_data(document_type)
+        
         return {
-            'status': 'success',
-            'extracted_data': self._get_demo_data(document_type),
-            'confidence_scores': {
-                'overall': 0.95,
-                'text_detection': 0.98,
-                'data_extraction': 0.92
+            'status': 'completed',
+            'extracted_data': extracted_data,
+            'confidence_score': 0.85,  # Single overall confidence score
+            'confidence_scores': {  # Individual field confidence scores
+                **{key: 0.85 + (hash(key) % 10) / 100 for key in extracted_data.keys()},
+                'overall': 0.85,
+                'text_detection': 0.92,
+                'data_extraction': 0.88
             },
             'processing_time': datetime.now().isoformat(),
             'mode': 'serverless_demo'
@@ -183,8 +187,11 @@ async def scan_document(
 ):
     """OCR document scanning endpoint"""
     try:
+        print(f"🔍 OCR scan request: user={user_id}, type={document_type}, file={file.filename}")
+        
         # Validate file upload
         if not file:
+            print("❌ No file uploaded")
             return {
                 "status": "error",
                 "message": "No file uploaded",
@@ -193,36 +200,51 @@ async def scan_document(
         
         # Read file content once and check file size (max 5MB for serverless)
         file_content = await file.read()
+        print(f"📄 File size: {len(file_content)} bytes")
+        
         if len(file_content) > 5 * 1024 * 1024:  # 5MB limit
+            print("❌ File too large")
             return {
                 "status": "error", 
                 "message": "File too large. Maximum size is 5MB.",
                 "timestamp": datetime.now().isoformat()
             }
         
+        if len(file_content) == 0:
+            print("❌ Empty file")
+            return {
+                "status": "error",
+                "message": "Empty file uploaded",
+                "timestamp": datetime.now().isoformat()
+            }
+        
         # Process with OCR service using the file content we already read
+        print("🤖 Processing with OCR service...")
         ocr_result = ocr_service.process_document(file_content, document_type)
         
-        # Add metadata
+        # Add metadata and ensure consistent response format
         scan_result = {
             "id": str(len(ocr_results) + 1),
             "user_id": user_id,
             "document_type": document_type,
             "filename": file.filename or "unknown",
             "file_size": len(file_content),
-            "timestamp": datetime.now().isoformat(),
+            "created_at": datetime.now().isoformat(),
             **ocr_result
         }
         
         # Store result
         ocr_results.append(scan_result)
         
+        print(f"✅ OCR scan completed successfully: {scan_result['id']}")
         return scan_result
     
     except Exception as e:
+        error_msg = f"OCR processing failed: {str(e)}"
+        print(f"❌ {error_msg}")
         return {
             "status": "error",
-            "message": f"OCR processing failed: {str(e)}",
+            "message": error_msg,
             "timestamp": datetime.now().isoformat(),
             "error_type": type(e).__name__
         }
