@@ -241,30 +241,5 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
     }
 
 # ===== VERCEL ASGI EXPORT =====
-# Export the ASGI application for Vercel
-# Multiple export patterns to ensure compatibility
-
-def get_app():
-    """Return the FastAPI application instance"""
-    return app
-
-# Standard ASGI application export
-application = app
-
-# Vercel handler function (required for some deployments)
-def handler(request, *args, **kwargs):
-    """Vercel handler - returns ASGI app"""
-    return app
-
-# Alternative handler pattern
-def main():
-    """Main function for serverless deployment"""
-    return app
-
-# Ensure proper module exports
-__all__ = ['app', 'application', 'handler', 'get_app', 'main']
-
-# For local development
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+# Simple ASGI application export for Vercel
+# Vercel will automatically detect the 'app' variable 

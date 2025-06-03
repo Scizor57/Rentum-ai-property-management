@@ -1,0 +1,10 @@
+backend/
+frontend/
+test_api.py
+vercel_validation.py
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.vscode/
+README.md 
