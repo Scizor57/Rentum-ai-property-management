@@ -30,6 +30,9 @@ class OCRService:
     
     def _setup_google_vision(self):
         """Setup Google Cloud Vision API client - works with both Vercel env vars and local JSON"""
+        self.client = None
+        self.credentials_available = False
+        
         try:
             # Method 1: Try Vercel/Production environment variables
             google_credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
@@ -39,6 +42,7 @@ class OCRService:
                 credentials_info = json.loads(google_credentials_json)
                 credentials = service_account.Credentials.from_service_account_info(credentials_info)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                self.credentials_available = True
                 logger.info("✅ Google Cloud Vision client initialized from environment variables")
                 return
             
@@ -66,6 +70,7 @@ class OCRService:
                 
                 credentials = service_account.Credentials.from_service_account_info(credentials_info)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                self.credentials_available = True
                 logger.info("✅ Google Cloud Vision client initialized from individual environment variables")
                 return
             
@@ -82,31 +87,54 @@ class OCRService:
                 for path in possible_paths:
                     if os.path.exists(path):
                         os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = path
+                        credentials_path = path
                         logger.info(f"Google credentials found at: {path}")
                         break
-                else:
-                    logger.warning("Google credentials not found. Using application default credentials.")
             
-            # Initialize the client with local credentials or default
-            self.client = vision.ImageAnnotatorClient()
-            logger.info("✅ Google Cloud Vision client initialized successfully")
+            if credentials_path and os.path.exists(credentials_path):
+                # Initialize the client with local credentials
+                self.client = vision.ImageAnnotatorClient()
+                self.credentials_available = True
+                logger.info("✅ Google Cloud Vision client initialized from local credentials")
+                return
+            
+            # Try application default credentials as last resort
+            try:
+                self.client = vision.ImageAnnotatorClient()
+                self.credentials_available = True
+                logger.info("✅ Google Cloud Vision client initialized with default credentials")
+                return
+            except Exception as default_error:
+                logger.warning(f"Application default credentials failed: {default_error}")
+            
+            # If we get here, no credentials were found
+            logger.warning("⚠️  Google Cloud Vision credentials not found")
+            logger.warning("🔧 Backend will start without OCR functionality")
+            logger.warning("📝 To enable OCR:")
+            logger.warning("   Local: Place google-credentials.json in backend folder")
+            logger.warning("   Vercel: Set GOOGLE_CREDENTIALS_JSON environment variable")
             
         except Exception as e:
-            logger.error(f"Failed to initialize Google Cloud Vision: {e}")
-            logger.error("Make sure you have set up Google Cloud credentials:")
-            logger.error("  Local: Place google-credentials.json in backend folder")
-            logger.error("  Vercel: Set GOOGLE_CREDENTIALS_JSON environment variable")
-            raise RuntimeError("Google Cloud Vision setup failed")
+            logger.error(f"Error setting up Google Cloud Vision: {e}")
+            logger.warning("🔧 Backend will start without OCR functionality")
+            
+        # Don't raise an error - let the backend start without OCR
+        self.credentials_available = False
     
     def _check_google_vision_setup(self):
         """Check if Google Cloud Vision is properly configured"""
+        if not self.credentials_available or not self.client:
+            logger.warning("⚠️  Google Cloud Vision is not configured")
+            logger.info("📝 OCR endpoints will return setup instructions")
+            return
+            
         try:
             # Test with a simple request
             test_image = vision.Image()
             test_image.content = b''  # Empty content for test
             
             # This will fail but helps verify the client is working
-            logger.info("Google Cloud Vision API is properly configured")
+            logger.info("✅ Google Cloud Vision API is properly configured")
         except Exception as e:
             logger.warning(f"Google Vision setup verification failed: {e}")
             logger.info("This is normal if no test image was provided")
@@ -142,6 +170,20 @@ class OCRService:
     
     def extract_text(self, image_path: str) -> Tuple[str, Dict]:
         """Extract text from image using Google Cloud Vision API"""
+        # Check if credentials are available
+        if not self.credentials_available or not self.client:
+            logger.error("❌ Google Cloud Vision credentials not available")
+            return "", {
+                "average_confidence": 0, 
+                "word_count": 0, 
+                "low_confidence_words": 0, 
+                "error": "Google Cloud Vision credentials not configured",
+                "setup_instructions": {
+                    "local": "Place google-credentials.json in backend folder",
+                    "vercel": "Set GOOGLE_CREDENTIALS_JSON environment variable in Vercel dashboard"
+                }
+            }
+        
         try:
             # Read the image file
             with io.open(image_path, 'rb') as image_file:
