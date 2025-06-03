@@ -231,7 +231,7 @@ function App() {
     if (scanResult.document_type === 'rental_agreement') {
       const message = `🎯 Rental agreement scanned successfully!\n\n📋 Go to the "Agreements" section to view all extracted data including:\n• Property information\n• Landlord and tenant details\n• Financial terms\n• Lease dates\n• Confidence scores\n\nThe AI has processed your document and the data is ready for review!`;
       alert(message);
-      setActiveTab('agreements');
+          setActiveTab('agreements');
     } else {
       const message = `🎯 Document scanned successfully!\n\n📊 Document type: ${scanResult.document_type}\n📋 Check the "Agreements" section if this was a rental agreement, or the "AI Scanner" tab to see all scan results.`;
       alert(message);

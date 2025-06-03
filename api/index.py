@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
-import json
+from .ocr_service import ocr_service
 
 # Create FastAPI application
 app = FastAPI(
@@ -32,6 +32,9 @@ DEMO_PROPERTIES = [
     {"id": "2", "address": "456 Oak Ave", "owner_id": "4", "status": "active"}
 ]
 
+# Storage for OCR results
+ocr_results = []
+
 # Routes
 @app.get("/")
 async def root():
@@ -39,8 +42,8 @@ async def root():
         "status": "✅ WORKING",
         "message": "Rentum AI Backend is operational!",
         "timestamp": datetime.now().isoformat(),
-        "deployment": "vercel-serverless",
-        "endpoints": ["/demo", "/users", "/properties", "/health"]
+        "deployment": "vercel-api-folder",
+        "endpoints": ["/demo", "/users", "/properties", "/health", "/ocr/scan"]
     }
 
 @app.get("/demo")
@@ -50,7 +53,9 @@ async def demo():
         "users": DEMO_USERS,
         "properties": DEMO_PROPERTIES,
         "total_users": len(DEMO_USERS),
-        "total_properties": len(DEMO_PROPERTIES)
+        "total_properties": len(DEMO_PROPERTIES),
+        "ocr_service": "✅ Available",
+        "ocr_results": len(ocr_results)
     }
 
 @app.get("/users")
@@ -67,17 +72,49 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "rentum-api",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "ocr_service": ocr_service.status
     }
 
 @app.get("/test")
 async def test():
     return {"message": "Test endpoint working!", "status": "success"}
 
-# Vercel handler - this is the key fix!
-handler = app
+@app.post("/ocr/scan")
+async def scan_document(
+    file: UploadFile = File(...),
+    user_id: str = Form(...),
+    document_type: str = Form(...)
+):
+    """OCR document scanning endpoint"""
+    
+    # Read file content
+    file_content = await file.read()
+    
+    # Process with OCR service
+    ocr_result = ocr_service.process_document(file_content, document_type)
+    
+    # Add metadata
+    scan_result = {
+        "id": str(len(ocr_results) + 1),
+        "user_id": user_id,
+        "document_type": document_type,
+        "filename": file.filename,
+        "file_size": len(file_content),
+        **ocr_result
+    }
+    
+    # Store result
+    ocr_results.append(scan_result)
+    
+    return scan_result
 
-# For local development
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+@app.get("/ocr/scans")
+async def list_ocr_scans(user_id: str = None):
+    """List OCR scan results"""
+    if user_id:
+        return [scan for scan in ocr_results if scan["user_id"] == user_id]
+    return ocr_results
+
+# Vercel handler - standard pattern for api folder
+handler = app 
