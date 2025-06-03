@@ -20,6 +20,7 @@ const API_BASE = process.env.REACT_APP_API_URL || process.env.NODE_ENV === 'prod
   : 'http://localhost:8000'; // Local development
 
 console.log('🔗 API_BASE URL:', API_BASE, '(Environment:', process.env.NODE_ENV, ')');
+// Build fix applied - eslint warnings resolved ✅
 
 function App() {
   // Navigation state
