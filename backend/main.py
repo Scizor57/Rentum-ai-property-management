@@ -24,7 +24,13 @@ app = FastAPI()
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://127.0.0.1:3000",
+        "https://*.vercel.app",  # Allow all Vercel apps
+        "https://rentum-ai-frontend.vercel.app",  # Specific frontend URL
+        "*"  # Allow all origins for now (you can restrict this later)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -301,6 +307,147 @@ async def startup():
         print("⚠️ Please check your DATABASE_URL in .env file")
         print("🔄 Falling back to in-memory storage...")
         app.state.db = None
+    
+    # Create demo users for testing
+    await create_demo_data()
+
+async def create_demo_data():
+    """Create demo users and sample data for testing"""
+    print("🎭 Creating demo users...")
+    
+    # Demo users
+    demo_users = [
+        {
+            "id": "1",
+            "name": "Alice Johnson",
+            "email": "alice.tenant@demo.com",
+            "phone": "+1-555-0101",
+            "profile_photo": None,
+            "role": "tenant",
+            "created_at": "2024-01-01T00:00:00"
+        },
+        {
+            "id": "2", 
+            "name": "Bob Smith",
+            "email": "bob.landlord@demo.com",
+            "phone": "+1-555-0102",
+            "profile_photo": None,
+            "role": "landlord",
+            "created_at": "2024-01-01T00:00:00"
+        },
+        {
+            "id": "3",
+            "name": "Carol Davis",
+            "email": "carol.tenant@demo.com", 
+            "phone": "+1-555-0103",
+            "profile_photo": None,
+            "role": "tenant",
+            "created_at": "2024-01-01T00:00:00"
+        },
+        {
+            "id": "4",
+            "name": "David Wilson",
+            "email": "david.landlord@demo.com",
+            "phone": "+1-555-0104", 
+            "profile_photo": None,
+            "role": "landlord",
+            "created_at": "2024-01-01T00:00:00"
+        }
+    ]
+    
+    # Demo properties
+    demo_properties = [
+        {
+            "id": "1",
+            "owner_id": "2",  # Bob Smith
+            "address": "123 Main St, Downtown City",
+            "details": {"bedrooms": 2, "bathrooms": 1, "area": "1200 sq ft", "amenities": ["parking", "gym"]},
+            "status": "active",
+            "created_at": "2024-01-01T00:00:00"
+        },
+        {
+            "id": "2", 
+            "owner_id": "4",  # David Wilson
+            "address": "456 Oak Ave, Riverside District", 
+            "details": {"bedrooms": 3, "bathrooms": 2, "area": "1800 sq ft", "amenities": ["pool", "garden"]},
+            "status": "active",
+            "created_at": "2024-01-01T00:00:00"
+        }
+    ]
+    
+    # Demo agreements
+    demo_agreements = [
+        {
+            "id": "1",
+            "property_id": "1",
+            "landlord_id": "2",  # Bob Smith
+            "tenant_id": "1",    # Alice Johnson
+            "start_date": "2024-01-01",
+            "end_date": "2024-12-31",
+            "rent": 1500.0,
+            "deposit": 3000.0,
+            "clauses": {"pets": "allowed", "smoking": "not allowed"},
+            "document_url": None,
+            "status": "active",
+            "created_at": "2024-01-01T00:00:00"
+        }
+    ]
+    
+    if app.state.db:
+        try:
+            async with app.state.db.acquire() as connection:
+                # Insert demo users (ignore if they already exist)
+                for user in demo_users:
+                    try:
+                        await connection.execute(
+                            "INSERT INTO users (id, name, email, phone, profile_photo, role, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING",
+                            user["id"], user["name"], user["email"], user["phone"], user["profile_photo"], user["role"], datetime.fromisoformat(user["created_at"].replace('Z', '+00:00'))
+                        )
+                    except Exception as e:
+                        print(f"Could not insert user {user['name']}: {e}")
+                
+                # Insert demo properties
+                for prop in demo_properties:
+                    try:
+                        await connection.execute(
+                            "INSERT INTO properties (id, owner_id, address, details, status, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
+                            prop["id"], prop["owner_id"], prop["address"], prop["details"], prop["status"], datetime.fromisoformat(prop["created_at"].replace('Z', '+00:00'))
+                        )
+                    except Exception as e:
+                        print(f"Could not insert property {prop['address']}: {e}")
+                
+                # Insert demo agreements
+                for agreement in demo_agreements:
+                    try:
+                        await connection.execute(
+                            "INSERT INTO agreements (id, property_id, landlord_id, tenant_id, start_date, end_date, rent, deposit, clauses, document_url, status, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (id) DO NOTHING",
+                            agreement["id"], agreement["property_id"], agreement["landlord_id"], agreement["tenant_id"], agreement["start_date"], agreement["end_date"], agreement["rent"], agreement["deposit"], agreement["clauses"], agreement["document_url"], agreement["status"], datetime.fromisoformat(agreement["created_at"].replace('Z', '+00:00'))
+                        )
+                    except Exception as e:
+                        print(f"Could not insert agreement: {e}")
+                        
+            print("✅ Demo data created successfully!")
+        except Exception as e:
+            print(f"❌ Could not create demo data in database: {e}")
+            # Fall back to in-memory
+            users_db.extend(demo_users)
+            properties_db.extend(demo_properties)
+            agreements_db.extend(demo_agreements)
+            print("✅ Demo data created in memory!")
+    else:
+        # Use in-memory storage
+        users_db.extend(demo_users)  
+        properties_db.extend(demo_properties)
+        agreements_db.extend(demo_agreements)
+        print("✅ Demo data created in memory!")
+        
+    print("🎭 Demo Users Available:")
+    for user in demo_users:
+        print(f"   👤 {user['name']} ({user['role']}) - {user['email']}")
+    
+    # Update global counter to avoid ID conflicts
+    global id_counter
+    id_counter = 10  # Start from 10 to avoid conflicts with demo data
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -318,6 +465,29 @@ async def read_root():
             return {"message": "Rentum AI backend is running!", "database": "error", "error": str(e)}
     else:
         return {"message": "Rentum AI backend is running!", "database": "in-memory"}
+
+@app.get("/demo")
+async def get_demo_info():
+    """Get demo user information for easy testing"""
+    demo_users = [
+        {"name": "Alice Johnson", "email": "alice.tenant@demo.com", "role": "tenant"},
+        {"name": "Bob Smith", "email": "bob.landlord@demo.com", "role": "landlord"}, 
+        {"name": "Carol Davis", "email": "carol.tenant@demo.com", "role": "tenant"},
+        {"name": "David Wilson", "email": "david.landlord@demo.com", "role": "landlord"}
+    ]
+    
+    return {
+        "message": "Demo users available for testing",
+        "users": demo_users,
+        "instructions": "Use any email above with any role to login",
+        "features": [
+            "🔍 Upload documents for AI OCR scanning",
+            "🤖 AI-powered review system", 
+            "🏠 Property management",
+            "💳 Payment tracking",
+            "📊 Dashboard with insights"
+        ]
+    }
 
 @app.post("/users", response_model=UserOut)
 async def create_user(user: UserCreate):
