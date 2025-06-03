@@ -1,0 +1,42 @@
+# Rentum AI Backend Environment Configuration
+# Copy this content to a new file named .env in the backend folder
+
+# Database Configuration - Supabase
+# Replace with your actual Supabase connection string
+# Format: postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.abcdefghijklmnop:your_password@aws-0-us-west-1.pooler.supabase.com:5432/postgres
+
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
+DEBUG=True
+
+# Security Configuration
+SECRET_KEY=your-secret-key-here-change-in-production
+JWT_SECRET=your-jwt-secret-here-change-in-production
+
+# External Services (for future implementation)
+# SMS/OTP Service
+TWILIO_ACCOUNT_SID=your-twilio-sid
+TWILIO_AUTH_TOKEN=your-twilio-token
+TWILIO_PHONE_NUMBER=your-twilio-phone
+
+# Email Service
+SENDGRID_API_KEY=your-sendgrid-key
+FROM_EMAIL=noreply@rentum.ai
+
+# File Storage
+CLOUD_STORAGE_BUCKET=rentum-documents
+CLOUD_STORAGE_REGION=ap-south-1
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# OCR/AI Services
+OCR_SERVICE_API_KEY=your-ocr-api-key
+AI_SERVICE_API_KEY=your-ai-api-key
+
+# Payment Gateway (for future implementation)
+RAZORPAY_KEY_ID=your-razorpay-key
+RAZORPAY_KEY_SECRET=your-razorpay-secret 

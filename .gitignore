@@ -1,0 +1,53 @@
+# 🔒 SECURITY: Never commit credentials!
+# Google Cloud Credentials
+google-credentials.json
+**/google-credentials.json
+*.key
+*.p12
+
+# Environment Variables
+.env
+.env.local  
+.env.production
+.env.staging
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Build outputs
+/frontend/build/
+/frontend/dist/
+/backend/dist/
+
+# Uploads & temp files
+uploads/
+*.jpg
+*.png
+*.pdf
+*.jpeg
+*.tmp
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/ 

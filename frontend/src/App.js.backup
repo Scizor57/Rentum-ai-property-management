@@ -1,0 +1,1245 @@
+import React, { useEffect, useState } from 'react';
+import './App.css';
+
+const API_BASE = 'http://localhost:8000'; // Backend API URL
+
+function App() {
+  // Navigation state
+  const [activeTab, setActiveTab] = useState('users');
+  const [darkMode, setDarkMode] = useState(false);
+  
+  // User authentication simulation
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loginForm, setLoginForm] = useState({ email: '', role: 'tenant' });
+  
+  // Check for URL parameters (e.g., ?role=tenant&landlord_id=123)
+  const [urlParams, setUrlParams] = useState(null);
+  
+  // State for users
+  const [users, setUsers] = useState([]);
+  const [userForm, setUserForm] = useState({ name: '', email: '', phone: '', role: 'tenant' });
+  const [isRegistering, setIsRegistering] = useState(false);
+  // State for properties
+  const [properties, setProperties] = useState([]);
+  const [propertyForm, setPropertyForm] = useState({ owner_id: '', address: '', details: '', status: 'active' });
+  // --- NEW STATE ---
+  const [agreements, setAgreements] = useState([]);
+  const [agreementForm, setAgreementForm] = useState({ property_id: '', landlord_id: '', tenant_id: '', start_date: '', end_date: '', rent: '', deposit: '', clauses: '', document_url: '' });
+  const [documents, setDocuments] = useState([]);
+  const [documentForm, setDocumentForm] = useState({ user_id: '', property_id: '', doc_type: '', file: null });
+  const [payments, setPayments] = useState([]);
+  const [paymentForm, setPaymentForm] = useState({ user_id: '', property_id: '', amount: '', payment_type: '', proof_file: null });
+  const [recommendations, setRecommendations] = useState([]);
+  const [recommendationForm, setRecommendationForm] = useState({ from_user_id: '', to_user_id: '', text: '', property_id: '' });
+  const [issues, setIssues] = useState([]);
+  const [issueForm, setIssueForm] = useState({ property_id: '', raised_by: '', details: '' });
+  const [notifications, setNotifications] = useState([]);
+  const [notificationForm, setNotificationForm] = useState({ recipient_id: '', notif_type: '', method: '', content: '' });
+  const [chat, setChat] = useState([]);
+  const [chatForm, setChatForm] = useState({ from_user_id: '', to_user_id: '', message: '', property_id: '' });
+  
+  // NEW STATE FOR OCR AND REVIEW SYSTEM
+  const [ocrScans, setOcrScans] = useState([]);
+  const [ocrForm, setOcrForm] = useState({ user_id: '', document_type: '', file: null });
+  const [reviewRequests, setReviewRequests] = useState([]);
+  const [reviewRequestForm, setReviewRequestForm] = useState({ requester_id: '', reviewer_id: '', reviewer_email: '', request_type: '', property_id: '', message: '' });
+  const [reviewResponses, setReviewResponses] = useState([]);
+  const [reviewResponseForm, setReviewResponseForm] = useState({ 
+    request_id: '', reviewer_id: '', reviewer_email: '', 
+    payment_reliability: '', property_maintenance: '', communication: '', lease_compliance: '',
+    responsiveness: '', property_condition: '', fairness: '', privacy_respect: '',
+    overall_rating: '', comments: ''
+  });
+  const [userProfile, setUserProfile] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('role')) {
+      const roleFromUrl = params.get('role');
+      const landlordId = params.get('landlord_id');
+      setUrlParams({ role: roleFromUrl, landlord_id: landlordId });
+      setUserForm(prev => ({ ...prev, role: roleFromUrl }));
+    }
+  }, []);
+
+  // Fetch users
+  useEffect(() => {
+    fetch(`${API_BASE}/users`).then(res => res.json()).then(setUsers);
+    fetch(`${API_BASE}/properties`).then(res => res.json()).then(setProperties);
+    fetch(`${API_BASE}/agreements`).then(res => res.json()).then(setAgreements);
+    fetch(`${API_BASE}/documents`).then(res => res.json()).then(setDocuments);
+    fetch(`${API_BASE}/payments`).then(res => res.json()).then(setPayments);
+    fetch(`${API_BASE}/recommendations`).then(res => res.json()).then(setRecommendations);
+    fetch(`${API_BASE}/issues`).then(res => res.json()).then(setIssues);
+    fetch(`${API_BASE}/notifications`).then(res => res.json()).then(setNotifications);
+    fetch(`${API_BASE}/chat`).then(res => res.json()).then(setChat);
+    // NEW ENDPOINTS
+    fetch(`${API_BASE}/ocr/scans`).then(res => res.json()).then(setOcrScans);
+    fetch(`${API_BASE}/reviews/requests`).then(res => res.json()).then(setReviewRequests);
+    fetch(`${API_BASE}/reviews/responses`).then(res => res.json()).then(setReviewResponses);
+  }, []);
+
+  // Login simulation
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const user = users.find(u => u.email === loginForm.email && u.role === loginForm.role);
+    if (user) {
+      setCurrentUser(user);
+      setActiveTab('dashboard');
+      // Fetch user profile
+      fetch(`${API_BASE}/users/${user.id}/profile`)
+        .then(res => res.json())
+        .then(setUserProfile)
+        .catch(err => console.log('Profile fetch error:', err));
+    } else {
+      alert('User not found. Please register first or check your role.');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setActiveTab('users');
+  };
+
+  // Filter data based on user role
+  const getFilteredData = () => {
+    if (!currentUser) return { 
+      properties, agreements, documents, payments, recommendations, issues, notifications, chat,
+      ocr_scans: ocrScans, review_requests: reviewRequests, review_responses: reviewResponses
+    };
+    
+    if (currentUser.role === 'tenant') {
+      return {
+        properties: properties.filter(p => p.status === 'active'), // Only show available properties
+        agreements: agreements.filter(a => a.tenant_id === currentUser.id),
+        documents: documents.filter(d => d.user_id === currentUser.id),
+        payments: payments.filter(p => p.user_id === currentUser.id),
+        recommendations: recommendations.filter(r => r.to_user_id === currentUser.id || r.from_user_id === currentUser.id),
+        issues: issues.filter(i => i.raised_by === currentUser.id),
+        notifications: notifications.filter(n => n.recipient_id === currentUser.id),
+        chat: chat.filter(c => c.from_user_id === currentUser.id || c.to_user_id === currentUser.id),
+        ocr_scans: ocrScans.filter(s => s.user_id === currentUser.id),
+        review_requests: reviewRequests.filter(r => r.requester_id === currentUser.id || r.reviewer_id === currentUser.id),
+        review_responses: reviewResponses.filter(r => {
+          const request = reviewRequests.find(req => req.id === r.request_id);
+          return request && (request.requester_id === currentUser.id || r.reviewer_id === currentUser.id);
+        })
+      };
+    } else if (currentUser.role === 'landlord') {
+      const myProperties = properties.filter(p => p.owner_id === currentUser.id);
+      const myPropertyIds = myProperties.map(p => p.id);
+      
+      return {
+        properties: myProperties, // Only show own properties
+        agreements: agreements.filter(a => a.landlord_id === currentUser.id),
+        documents: documents.filter(d => myPropertyIds.includes(d.property_id) || d.user_id === currentUser.id),
+        payments: payments.filter(p => myPropertyIds.includes(p.property_id)),
+        recommendations: recommendations.filter(r => r.to_user_id === currentUser.id || r.from_user_id === currentUser.id),
+        issues: issues.filter(i => myPropertyIds.includes(i.property_id)),
+        notifications: notifications.filter(n => n.recipient_id === currentUser.id),
+        chat: chat.filter(c => c.from_user_id === currentUser.id || c.to_user_id === currentUser.id),
+        ocr_scans: ocrScans.filter(s => s.user_id === currentUser.id),
+        review_requests: reviewRequests.filter(r => r.requester_id === currentUser.id || r.reviewer_id === currentUser.id),
+        review_responses: reviewResponses.filter(r => {
+          const request = reviewRequests.find(req => req.id === r.request_id);
+          return request && (request.requester_id === currentUser.id || r.reviewer_id === currentUser.id);
+        })
+      };
+    }
+    
+    return { 
+      properties, agreements, documents, payments, recommendations, issues, notifications, chat,
+      ocr_scans: ocrScans, review_requests: reviewRequests, review_responses: reviewResponses
+    };
+  };
+
+  const filteredData = getFilteredData();
+
+  // Handlers
+  const handleUserChange = e => setUserForm({ ...userForm, [e.target.name]: e.target.value });
+  const handlePropertyChange = e => setPropertyForm({ ...propertyForm, [e.target.name]: e.target.value });
+  const handleAgreementChange = e => setAgreementForm({ ...agreementForm, [e.target.name]: e.target.value });
+  const handleDocumentChange = e => setDocumentForm({ ...documentForm, [e.target.name]: e.target.value });
+  const handlePaymentChange = e => setPaymentForm({ ...paymentForm, [e.target.name]: e.target.value });
+  const handleRecommendationChange = e => setRecommendationForm({ ...recommendationForm, [e.target.name]: e.target.value });
+  const handleIssueChange = e => setIssueForm({ ...issueForm, [e.target.name]: e.target.value });
+  const handleChatChange = e => setChatForm({ ...chatForm, [e.target.name]: e.target.value });
+  const handleLoginChange = e => setLoginForm({ ...loginForm, [e.target.name]: e.target.value });
+  
+  // NEW HANDLERS FOR OCR AND REVIEW SYSTEM
+  const handleOcrUpload = async () => {
+    if (!ocrForm.file || !ocrForm.document_type) {
+      alert('Please select a file and document type');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', ocrForm.file);
+    formData.append('user_id', currentUser.id);
+    formData.append('document_type', ocrForm.document_type);
+    
+    try {
+      const res = await fetch(`${API_BASE}/ocr/scan`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const newScan = await res.json();
+        setOcrScans([...ocrScans, newScan]);
+        setOcrForm({ user_id: '', document_type: '', file: null });
+        
+        // Auto-fill information based on document type
+        autoFillFromOcrData(newScan);
+        
+        alert('Document scanned successfully! Check other tabs for auto-filled information.');
+      } else {
+        const errorData = await res.json();
+        alert('OCR scan failed: ' + (errorData.detail || 'Unknown error'));
+      }
+    } catch (error) {
+      alert('OCR scan failed: ' + error.message);
+    }
+  };
+  
+  const autoFillFromOcrData = (scanResult) => {
+    const extractedData = scanResult.extracted_data;
+    
+    // Auto-fill based on document type
+    switch (scanResult.document_type) {
+      case 'rental_agreement':
+        if (extractedData.rent) {
+          setAgreementForm(prev => ({ ...prev, rent: extractedData.rent }));
+        }
+        if (extractedData.deposit) {
+          setAgreementForm(prev => ({ ...prev, deposit: extractedData.deposit }));
+        }
+        if (extractedData.start_date) {
+          setAgreementForm(prev => ({ ...prev, start_date: extractedData.start_date }));
+        }
+        if (extractedData.end_date) {
+          setAgreementForm(prev => ({ ...prev, end_date: extractedData.end_date }));
+        }
+        break;
+        
+      case 'id_card':
+        if (extractedData.name) {
+          setUserForm(prev => ({ ...prev, name: extractedData.name }));
+        }
+        if (extractedData.phone) {
+          setUserForm(prev => ({ ...prev, phone: extractedData.phone }));
+        }
+        break;
+        
+      case 'property_document':
+        if (extractedData.address) {
+          setPropertyForm(prev => ({ ...prev, address: extractedData.address }));
+        }
+        if (extractedData.details) {
+          setPropertyForm(prev => ({ ...prev, details: extractedData.details }));
+        }
+        break;
+        
+      case 'payment_receipt':
+        if (extractedData.amount) {
+          setPaymentForm(prev => ({ ...prev, amount: extractedData.amount }));
+        }
+        if (extractedData.payment_type) {
+          setPaymentForm(prev => ({ ...prev, payment_type: extractedData.payment_type }));
+        }
+        break;
+    }
+  };
+
+  const handleReviewRequest = async () => {
+    const requestData = {
+      ...reviewRequestForm,
+      requester_id: currentUser.id
+    };
+    
+    try {
+      const res = await fetch(`${API_BASE}/reviews/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
+      });
+      if (res.ok) {
+        const newRequest = await res.json();
+        setReviewRequests([...reviewRequests, newRequest]);
+        setReviewRequestForm({ requester_id: '', reviewer_id: '', reviewer_email: '', request_type: '', property_id: '', message: '' });
+        alert('Review request sent successfully!');
+      }
+    } catch (error) {
+      alert('Review request failed: ' + error.message);
+    }
+  };
+
+  const handleReviewResponse = async () => {
+    const responseData = {
+      ...reviewResponseForm,
+      reviewer_id: currentUser.id
+    };
+    
+    try {
+      const res = await fetch(`${API_BASE}/reviews/response`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(responseData)
+      });
+      if (res.ok) {
+        const newResponse = await res.json();
+        setReviewResponses([...reviewResponses, newResponse]);
+        setReviewResponseForm({ 
+          request_id: '', reviewer_id: '', reviewer_email: '', 
+          payment_reliability: '', property_maintenance: '', communication: '', lease_compliance: '',
+          responsiveness: '', property_condition: '', fairness: '', privacy_respect: '',
+          overall_rating: '', comments: ''
+        });
+        alert('Review submitted successfully with AI analysis!');
+      }
+    } catch (error) {
+      alert('Review submission failed: ' + error.message);
+    }
+  };
+
+  const addUser = async e => {
+    e.preventDefault();
+    setIsRegistering(true);
+    try {
+      const res = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userForm)
+      });
+      if (res.ok) {
+        const newUser = await res.json();
+        setUsers([...users, newUser]);
+        // Reset form fields after successful registration
+        setUserForm({ name: '', email: '', phone: '', role: 'tenant' });
+        // Show success message
+        alert(`✅ Registration successful! Welcome ${newUser.name}!`);
+      } else {
+        const errorData = await res.json();
+        alert(`❌ Registration failed: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`❌ Registration failed: ${error.message}`);
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const addProperty = async e => {
+    e.preventDefault();
+    const propertyData = { 
+      ...propertyForm, 
+      owner_id: currentUser ? currentUser.id : propertyForm.owner_id,
+      details: propertyForm.details ? { info: propertyForm.details } : {} 
+    };
+    const res = await fetch(`${API_BASE}/properties`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(propertyData)
+    });
+    if (res.ok) {
+      const newProperty = await res.json();
+      setProperties([...properties, newProperty]);
+      setPropertyForm({ owner_id: '', address: '', details: '', status: 'active' });
+    }
+  };
+
+  const addAgreement = async e => {
+    e.preventDefault();
+    const res = await fetch(`${API_BASE}/agreements`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(agreementForm)
+    });
+    if (res.ok) { const newItem = await res.json(); setAgreements([...agreements, newItem]); setAgreementForm({ property_id: '', landlord_id: '', tenant_id: '', start_date: '', end_date: '', rent: '', deposit: '', clauses: '', document_url: '' }); }
+  };
+
+  const addDocument = async e => {
+    e.preventDefault();
+    if (!documentForm.file) {
+      alert('Please select a file to upload');
+      return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', documentForm.file);
+    formData.append('user_id', currentUser ? currentUser.id : documentForm.user_id);
+    formData.append('property_id', documentForm.property_id || '');
+    formData.append('doc_type', documentForm.doc_type);
+    
+    try {
+      const res = await fetch(`${API_BASE}/documents`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) { 
+        const newItem = await res.json(); 
+        setDocuments([...documents, newItem]); 
+        setDocumentForm({ user_id: '', property_id: '', doc_type: '', file: null }); 
+        alert('Document uploaded successfully!');
+      }
+    } catch (error) {
+      alert('Document upload failed: ' + error.message);
+    }
+  };
+
+  const addPayment = async e => {
+    e.preventDefault();
+    
+    const formData = new FormData();
+    formData.append('user_id', currentUser ? currentUser.id : paymentForm.user_id);
+    formData.append('property_id', paymentForm.property_id);
+    formData.append('amount', paymentForm.amount);
+    formData.append('payment_type', paymentForm.payment_type);
+    if (paymentForm.proof_file) {
+      formData.append('proof_file', paymentForm.proof_file);
+    }
+    
+    try {
+      const res = await fetch(`${API_BASE}/payments`, {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) { 
+        const newItem = await res.json(); 
+        setPayments([...payments, newItem]); 
+        setPaymentForm({ user_id: '', property_id: '', amount: '', payment_type: '', proof_file: null }); 
+        alert('Payment recorded successfully!');
+      }
+    } catch (error) {
+      alert('Payment recording failed: ' + error.message);
+    }
+  };
+
+  const addRecommendation = async e => {
+    e.preventDefault();
+    const res = await fetch(`${API_BASE}/recommendations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recommendationForm)
+    });
+    if (res.ok) { const newItem = await res.json(); setRecommendations([...recommendations, newItem]); setRecommendationForm({ from_user_id: '', to_user_id: '', text: '', property_id: '' }); }
+  };
+
+  const addIssue = async e => {
+    e.preventDefault();
+    const issueData = { 
+      ...issueForm, 
+      raised_by: currentUser ? currentUser.id : issueForm.raised_by 
+    };
+    const res = await fetch(`${API_BASE}/issues`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(issueData)
+    });
+    if (res.ok) { const newItem = await res.json(); setIssues([...issues, newItem]); setIssueForm({ property_id: '', raised_by: '', details: '' }); }
+  };
+
+  const addChat = async e => {
+    e.preventDefault();
+    const chatData = { 
+      ...chatForm, 
+      from_user_id: currentUser ? currentUser.id : chatForm.from_user_id 
+    };
+    const res = await fetch(`${API_BASE}/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(chatData)
+    });
+    if (res.ok) { const newItem = await res.json(); setChat([...chat, newItem]); setChatForm({ from_user_id: '', to_user_id: '', message: '', property_id: '' }); }
+  };
+
+  const tabs = currentUser ? [
+    { id: 'dashboard', label: 'Dashboard', icon: '🏠' },
+    { id: 'properties', label: currentUser.role === 'landlord' ? 'My Properties' : 'Browse Properties', icon: '🏠' },
+    { id: 'agreements', label: 'Agreements', icon: '📋' },
+    { id: 'documents', label: 'Documents', icon: '📄' },
+    { id: 'ocr', label: 'AI Scanner', icon: '🔍' },
+    { id: 'payments', label: 'Payments', icon: '💳' },
+    { id: 'ai-reviews', label: 'AI Reviews', icon: '🤖' },
+    { id: 'profile', label: 'AI Profile', icon: '👤' },
+    { id: 'issues', label: 'Issues', icon: '🔧' },
+    { id: 'notifications', label: 'Notifications', icon: '🔔' },
+    { id: 'chat', label: 'Messages', icon: '💬' }
+  ] : [
+    { id: 'users', label: 'Register/Login', icon: '👥' }
+  ];
+
+  // Login screen
+  if (!currentUser) {
+    return (
+      <div className={`App ${darkMode ? 'dark-mode' : ''}`}>
+        <div className="header">
+          <h1>🏠 Rentum AI - Property Management Platform</h1>
+          <button 
+            className="theme-toggle"
+            onClick={() => setDarkMode(!darkMode)}
+            title={`Switch to ${darkMode ? 'light' : 'dark'} mode`}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
+        
+        <div className="login-container">
+          <div className="login-section">
+            <h2>🔐 Login to Your Account</h2>
+            <form onSubmit={handleLogin} className="form">
+              <input 
+                name="email" 
+                placeholder="Email Address" 
+                value={loginForm.email} 
+                onChange={handleLoginChange} 
+                required 
+              />
+              <select name="role" value={loginForm.role} onChange={handleLoginChange}>
+                <option value="tenant">Tenant</option>
+                <option value="landlord">Landlord</option>
+                <option value="company">Company</option>
+              </select>
+              <button type="submit">Login</button>
+            </form>
+            
+            <div className="demo-accounts">
+              <h3>Demo Accounts (from database):</h3>
+              <div className="demo-list">
+                {users.map(user => (
+                  <div key={user.id} className="demo-account">
+                    <strong>{user.name}</strong> ({user.role})
+                    <br />Email: {user.email}
+                    <button 
+                      onClick={() => setLoginForm({ email: user.email, role: user.role })}
+                      className="quick-login"
+                    >
+                      Quick Login
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="register-section">
+            <h2>📝 Register New Account</h2>
+            <form onSubmit={addUser} className="form">
+              <input name="name" placeholder="Full Name" value={userForm.name} onChange={handleUserChange} required />
+              <input name="email" placeholder="Email Address" value={userForm.email} onChange={handleUserChange} required />
+              <input name="phone" placeholder="Phone Number" value={userForm.phone} onChange={handleUserChange} />
+              {urlParams && (
+                <div className="url-join-notice">
+                  <p>🔗 You're joining as a <strong>{urlParams.role}</strong> through an invitation link</p>
+                </div>
+              )}
+              <select name="role" value={userForm.role} onChange={handleUserChange} disabled={urlParams !== null}>
+                <option value="tenant">Tenant</option>
+                <option value="landlord">Landlord</option>
+                <option value="company">Company</option>
+              </select>
+              <button type="submit" disabled={isRegistering}>
+                {isRegistering ? '⏳ Registering...' : 'Register'}
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const renderDashboard = () => {
+    return (
+      <div className="section">
+        <h2>🏠 Welcome, {currentUser.name}!</h2>
+        <div className="user-info">
+          <p><strong>Role:</strong> {currentUser.role.toUpperCase()}</p>
+          <p><strong>Email:</strong> {currentUser.email}</p>
+          <p><strong>Member since:</strong> {new Date(currentUser.created_at).toLocaleDateString()}</p>
+        </div>
+        
+        <div className="dashboard-stats">
+          <div className="stat-card">
+            <h3>{currentUser.role === 'landlord' ? 'My Properties' : 'Available Properties'}</h3>
+            <div className="stat-number">{filteredData.properties.length}</div>
+          </div>
+          <div className="stat-card">
+            <h3>Active Agreements</h3>
+            <div className="stat-number">{filteredData.agreements.filter(a => a.status === 'active').length}</div>
+          </div>
+          <div className="stat-card">
+            <h3>Documents</h3>
+            <div className="stat-number">{filteredData.documents.length}</div>
+          </div>
+          <div className="stat-card">
+            <h3>Messages</h3>
+            <div className="stat-number">{filteredData.chat.length}</div>
+          </div>
+        </div>
+
+        <div className="recent-activity">
+          <h3>Recent Activity</h3>
+          <ul>
+            {filteredData.notifications.slice(0, 5).map(n => (
+              <li key={n.id}>
+                <strong>{n.notif_type.replace('_', ' ').toUpperCase()}</strong> - {n.content}
+              </li>
+            ))}
+            {filteredData.notifications.length === 0 && <li>No recent notifications</li>}
+          </ul>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTabContent = () => {
+    switch(activeTab) {
+      case 'dashboard':
+        return renderDashboard();
+      case 'properties':
+        return (
+        <div className="section">
+            <h2>🏠 {currentUser.role === 'landlord' ? 'My Properties Management' : 'Browse Available Properties'}</h2>
+            {currentUser.role === 'landlord' && (
+              <form onSubmit={addProperty} className="form">
+                <input name="address" placeholder="Property Address" value={propertyForm.address} onChange={handlePropertyChange} required />
+                <input name="details" placeholder="Property Details" value={propertyForm.details} onChange={handlePropertyChange} />
+                <select name="status" value={propertyForm.status} onChange={handlePropertyChange}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                <button type="submit">Add Property</button>
+              </form>
+            )}
+            <div className="list-container">
+              <h3>{currentUser.role === 'landlord' ? 'My Properties' : 'Available Properties'} ({filteredData.properties.length})</h3>
+          <ul>
+            {filteredData.properties.map(p => (
+                  <li key={p.id}>
+                    <strong>{p.address}</strong> 
+                    <span className={`status-${p.status}`}> • {p.status}</span>
+                    {currentUser.role === 'tenant' && <><br />Owner: {p.owner_id}</>}
+                    {currentUser.role === 'landlord' && <><br />Property ID: {p.id}</>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'agreements':
+        return (
+          <div className="section">
+            <h2>📋 {currentUser.role === 'landlord' ? 'Tenant Agreements Management' : 'My Rental Agreements'}</h2>
+            {currentUser.role === 'landlord' && (
+              <form onSubmit={addAgreement} className="form">
+                <select name="property_id" value={agreementForm.property_id} onChange={handleAgreementChange} required>
+                  <option value="">Select Property</option>
+                  {filteredData.properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.address}</option>
+                  ))}
+                </select>
+                <input name="tenant_id" placeholder="Tenant ID" value={agreementForm.tenant_id} onChange={handleAgreementChange} required />
+                <input name="start_date" type="date" value={agreementForm.start_date} onChange={handleAgreementChange} required />
+                <input name="end_date" type="date" value={agreementForm.end_date} onChange={handleAgreementChange} required />
+                <input name="rent" type="number" placeholder="Monthly Rent (₹)" value={agreementForm.rent} onChange={handleAgreementChange} required />
+                <input name="deposit" type="number" placeholder="Security Deposit (₹)" value={agreementForm.deposit} onChange={handleAgreementChange} required />
+                <button type="submit">Create Agreement</button>
+              </form>
+            )}
+            <div className="list-container">
+              <h3>{currentUser.role === 'landlord' ? 'All Agreements' : 'My Agreement Details'} ({filteredData.agreements.length})</h3>
+              {currentUser.role === 'tenant' ? (
+                // Display as information cards for tenants
+                <div className="agreements-display">
+                  {filteredData.agreements.map(a => (
+                    <div key={a.id} className="agreement-card">
+                      <div className="agreement-header">
+                        <h4>📋 Rental Agreement</h4>
+                        <span className={`status-badge status-${a.status}`}>{a.status}</span>
+                      </div>
+                      <div className="agreement-details">
+                        <div className="detail-row">
+                          <strong>Property:</strong> {properties.find(p => p.id === a.property_id)?.address || a.property_id}
+                        </div>
+                        <div className="detail-row">
+                          <strong>Landlord:</strong> {users.find(u => u.id === a.landlord_id)?.name || a.landlord_id}
+                        </div>
+                        <div className="detail-row">
+                          <strong>Monthly Rent:</strong> ₹{a.rent}
+                        </div>
+                        <div className="detail-row">
+                          <strong>Security Deposit:</strong> ₹{a.deposit}
+                        </div>
+                        <div className="detail-row">
+                          <strong>Lease Period:</strong> {a.start_date} to {a.end_date}
+                        </div>
+                        <div className="detail-row">
+                          <strong>Agreement ID:</strong> {a.id}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {filteredData.agreements.length === 0 && (
+                    <p>No rental agreements found. Contact your landlord to create an agreement.</p>
+                  )}
+                </div>
+              ) : (
+                // Display as list for landlords
+                <ul>
+                  {filteredData.agreements.map(a => (
+                    <li key={a.id}>
+                      <strong>Property {a.property_id}</strong> 
+                      <span className={`status-${a.status}`}> • {a.status}</span>
+                      <br />Tenant: {a.tenant_id}
+                      <br />Rent: ₹{a.rent}/month | Deposit: ₹{a.deposit}
+                      <br />Duration: {a.start_date} to {a.end_date}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        );
+      case 'documents':
+        return (
+          <div className="section">
+            <h2>📄 Document Vault</h2>
+            <form onSubmit={addDocument} className="form">
+              <select name="property_id" value={documentForm.property_id} onChange={handleDocumentChange}>
+                <option value="">Select Property (optional)</option>
+                {filteredData.properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.address}</option>
+                ))}
+              </select>
+              <select name="doc_type" value={documentForm.doc_type} onChange={handleDocumentChange} required>
+                <option value="">Select Document Type</option>
+                <option value="aadhaar">Aadhaar Card</option>
+                <option value="pan">PAN Card</option>
+                <option value="police_verification">Police Verification</option>
+                <option value="rental_agreement">Rental Agreement</option>
+                <option value="payment_proof">Payment Proof</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setDocumentForm({...documentForm, file: e.target.files[0]})}
+              />
+              <button type="submit">Upload Document</button>
+            </form>
+            <div className="list-container">
+              <h3>My Documents ({filteredData.documents.length})</h3>
+              <ul>
+                {filteredData.documents.map(d => (
+                  <li key={d.id}>
+                    <strong>{d.doc_type.replace('_', ' ').toUpperCase()}</strong>
+                    {d.property_id && <><br />Property: {d.property_id}</>}
+                    <br />Link: <a href={d.url} target="_blank" rel="noopener noreferrer">View Document</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'payments':
+        return (
+          <div className="section">
+            <h2>💳 {currentUser.role === 'landlord' ? 'Payment Collection' : 'Payment Management'}</h2>
+            <form onSubmit={addPayment} className="form">
+              <select name="property_id" value={paymentForm.property_id} onChange={handlePaymentChange} required>
+                <option value="">Select Property</option>
+                {filteredData.properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.address}</option>
+                ))}
+              </select>
+              <input name="amount" type="number" placeholder="Amount (INR)" value={paymentForm.amount} onChange={handlePaymentChange} required />
+              <select name="payment_type" value={paymentForm.payment_type} onChange={handlePaymentChange} required>
+                <option value="">Select Payment Type</option>
+                <option value="rent">Monthly Rent</option>
+                <option value="deposit">Security Deposit</option>
+                <option value="wallet_topup">Wallet Top-up</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="other">Other</option>
+              </select>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setPaymentForm({...paymentForm, proof_file: e.target.files[0]})}
+              />
+              <button type="submit">{currentUser.role === 'landlord' ? 'Record Payment Received' : 'Record Payment Made'}</button>
+            </form>
+            <div className="list-container">
+              <h3>Payments ({filteredData.payments.length})</h3>
+              <ul>
+                {filteredData.payments.map(p => (
+                  <li key={p.id}>
+                    <strong>INR {p.amount}</strong> - {p.payment_type.replace('_', ' ')}
+                    <span className={`status-${p.status}`}> • {p.status}</span>
+                    {p.proof_file && <><br />Proof: <a href={p.proof_url} target="_blank" rel="noopener noreferrer">View Proof</a></>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'recommendations':
+        return (
+          <div className="section">
+            <h2>⭐ Reviews & Recommendations</h2>
+            <form onSubmit={addRecommendation} className="form">
+              <input name="to_user_id" placeholder="To User ID" value={recommendationForm.to_user_id} onChange={handleRecommendationChange} required />
+              <select name="property_id" value={recommendationForm.property_id} onChange={handleRecommendationChange}>
+                <option value="">Select Property (optional)</option>
+                {filteredData.properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.address}</option>
+                ))}
+              </select>
+              <textarea name="text" placeholder="Write your review..." value={recommendationForm.text} onChange={handleRecommendationChange} required rows="3"></textarea>
+              <button type="submit">Submit Review</button>
+            </form>
+            <div className="list-container">
+              <h3>Reviews ({filteredData.recommendations.length})</h3>
+              <ul>
+                {filteredData.recommendations.map(r => (
+                  <li key={r.id}>
+                    <strong>{r.from_user_id === currentUser.id ? 'You' : r.from_user_id} to {r.to_user_id === currentUser.id ? 'You' : r.to_user_id}</strong>
+                    {r.ai_rating && <span> | AI Rating: {r.ai_rating}/5</span>}
+                    <br />"{r.text}"
+                    {r.property_id && <><br />Property: {r.property_id}</>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'issues':
+        return (
+          <div className="section">
+            <h2>🔧 {currentUser.role === 'landlord' ? 'Property Issues Management' : 'Report Issues'}</h2>
+            {currentUser.role === 'tenant' && (
+              <form onSubmit={addIssue} className="form">
+                <select name="property_id" value={issueForm.property_id} onChange={handleIssueChange} required>
+                  <option value="">Select Property</option>
+                  {filteredData.properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.address}</option>
+                  ))}
+                </select>
+                <textarea name="details" placeholder="Describe the issue..." value={issueForm.details} onChange={handleIssueChange} required rows="3"></textarea>
+                <button type="submit">Report Issue</button>
+              </form>
+            )}
+            <div className="list-container">
+              <h3>{currentUser.role === 'landlord' ? 'Property Issues' : 'My Reported Issues'} ({filteredData.issues.length})</h3>
+              <ul>
+                {filteredData.issues.map(i => (
+                  <li key={i.id}>
+                    <strong>Property {i.property_id}</strong>
+                    <span className={`status-${i.status}`}> • {i.status}</span>
+                    {currentUser.role === 'landlord' && <><br />Reported by: {i.raised_by}</>}
+                    <br />"{i.details}"
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'notifications':
+        return (
+          <div className="section">
+            <h2>🔔 Notifications</h2>
+            <div className="list-container">
+              <h3>My Notifications ({filteredData.notifications.length})</h3>
+              <ul>
+                {filteredData.notifications.map(n => (
+                  <li key={n.id}>
+                    <strong>{n.notif_type.replace('_', ' ').toUpperCase()}</strong> via {n.method}
+                    <span className={`status-${n.status}`}> • {n.status}</span>
+                    <br />"{n.content}"
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'chat':
+        return (
+          <div className="section">
+            <h2>💬 Messages</h2>
+            <form onSubmit={addChat} className="form">
+              <input name="to_user_id" placeholder="To User ID" value={chatForm.to_user_id} onChange={handleChatChange} required />
+              <select name="property_id" value={chatForm.property_id} onChange={handleChatChange}>
+                <option value="">Select Property (optional)</option>
+                {filteredData.properties.map(p => (
+                  <option key={p.id} value={p.id}>{p.address}</option>
+                ))}
+              </select>
+              <textarea name="message" placeholder="Type your message..." value={chatForm.message} onChange={handleChatChange} required rows="3"></textarea>
+              <button type="submit">Send Message</button>
+            </form>
+            <div className="list-container">
+              <h3>My Messages ({filteredData.chat.length})</h3>
+              <ul>
+                {filteredData.chat.map(c => (
+                  <li key={c.id}>
+                    <strong>{c.from_user_id === currentUser.id ? 'You' : c.from_user_id} to {c.to_user_id === currentUser.id ? 'You' : c.to_user_id}</strong>
+                    {c.property_id && <span> | Property: {c.property_id}</span>}
+                    <br />"{c.message}"
+                    <br /><small>{new Date(c.created_at).toLocaleString()}</small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        );
+      case 'ocr':
+        return (
+          <div className="section">
+            <h2>🔍 AI Document Scanner</h2>
+            <div className="ocr-container">
+              <div className="upload-section">
+                <h3>📄 Upload Any Document for AI Analysis</h3>
+                <div className="form">
+                  <select 
+                    value={ocrForm.document_type} 
+                    onChange={(e) => setOcrForm({...ocrForm, document_type: e.target.value})}
+                  >
+                    <option value="">Select Document Type</option>
+                    <option value="rental_agreement">Rental Agreement</option>
+                    <option value="id_card">ID Card (Aadhaar/PAN/Driving License)</option>
+                    <option value="property_document">Property Document</option>
+                    <option value="payment_receipt">Payment Receipt</option>
+                    <option value="bank_statement">Bank Statement</option>
+                    <option value="salary_slip">Salary Slip</option>
+                    <option value="police_verification">Police Verification</option>
+                    <option value="utility_bill">Utility Bill</option>
+                    <option value="other">Other Document</option>
+                  </select>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setOcrForm({...ocrForm, file: e.target.files[0]})}
+                  />
+                  <button onClick={handleOcrUpload} disabled={!ocrForm.file || !ocrForm.document_type}>
+                    🚀 Scan Document with AI
+                  </button>
+                  <p className="upload-note">
+                    📝 Supported formats: Images (JPG, PNG) and PDF files
+                    <br />🤖 AI will extract key information and auto-fill relevant forms
+                  </p>
+                </div>
+              </div>
+              
+              <div className="ocr-results">
+                <h3>📊 AI Scan Results ({filteredData.ocr_scans.length})</h3>
+                {filteredData.ocr_scans.map(scan => (
+                  <div key={scan.id} className="ocr-result-item">
+                    <div className="scan-header">
+                      <strong>📄 {scan.document_type.replace('_', ' ').toUpperCase()}</strong>
+                      <span className={`status status-${scan.status}`}>{scan.status}</span>
+                    </div>
+                    
+                    <div className="extracted-data">
+                      <h4>🤖 AI Extracted Information:</h4>
+                      {Object.entries(scan.extracted_data).map(([key, value]) => (
+                        <div key={key} className="data-field">
+                          <strong>{key.replace('_', ' ').toUpperCase()}:</strong> {value}
+                          <span className="confidence">
+                            ({scan.confidence_scores[key] || 0}% confidence)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="scan-meta">
+                      <small>Scanned: {new Date(scan.created_at).toLocaleString()}</small>
+                      <br />
+                      <small>✨ Information auto-filled in relevant forms</small>
+                    </div>
+                  </div>
+                ))}
+                {filteredData.ocr_scans.length === 0 && (
+                  <p>No documents scanned yet. Upload your first document above!</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      case 'ai-reviews':
+        return (
+          <div className="section">
+            <h2>🤖 AI-Powered Review System</h2>
+            <div className="reviews-container">
+              
+              {/* Review Request Section */}
+              <div className="review-section">
+                <h3>📝 Request Review</h3>
+                <div className="form">
+                  <select 
+                    value={reviewRequestForm.request_type} 
+                    onChange={(e) => setReviewRequestForm({...reviewRequestForm, request_type: e.target.value})}
+                  >
+                    <option value="">Select Review Type</option>
+                    <option value="tenant_review">Tenant Review</option>
+                    <option value="landlord_review">Landlord Review</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Reviewer User ID or Email"
+                    value={reviewRequestForm.reviewer_id || reviewRequestForm.reviewer_email}
+                    onChange={(e) => {
+                      if (e.target.value.includes('@')) {
+                        setReviewRequestForm({...reviewRequestForm, reviewer_email: e.target.value, reviewer_id: ''});
+                      } else {
+                        setReviewRequestForm({...reviewRequestForm, reviewer_id: e.target.value, reviewer_email: ''});
+                      }
+                    }}
+                  />
+                  <select 
+                    value={reviewRequestForm.property_id} 
+                    onChange={(e) => setReviewRequestForm({...reviewRequestForm, property_id: e.target.value})}
+                  >
+                    <option value="">Select Property (optional)</option>
+                    {filteredData.properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.address}</option>
+                    ))}
+                  </select>
+                  <textarea
+                    placeholder="Message to reviewer"
+                    value={reviewRequestForm.message}
+                    onChange={(e) => setReviewRequestForm({...reviewRequestForm, message: e.target.value})}
+                    rows="3"
+                  />
+                  <button onClick={handleReviewRequest}>Send Review Request</button>
+                </div>
+              </div>
+
+              {/* Review Response Section */}
+              <div className="review-section">
+                <h3>📊 Submit Review</h3>
+                <div className="form">
+                  <select 
+                    value={reviewResponseForm.request_id} 
+                    onChange={(e) => setReviewResponseForm({...reviewResponseForm, request_id: e.target.value})}
+                  >
+                    <option value="">Select Request to Review</option>
+                    {filteredData.review_requests.filter(req => req.status === 'pending').map(req => (
+                      <option key={req.id} value={req.id}>
+                        {req.request_type} - {req.requester_id}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <div className="rating-grid">
+                    {['payment_reliability', 'property_maintenance', 'communication', 'lease_compliance', 
+                      'responsiveness', 'property_condition', 'fairness', 'privacy_respect'].map(category => (
+                      <div key={category} className="rating-item">
+                        <label>{category.replace('_', ' ').toUpperCase()}:</label>
+                        <select 
+                          value={reviewResponseForm[category] || ''} 
+                          onChange={(e) => setReviewResponseForm({...reviewResponseForm, [category]: parseInt(e.target.value)})}
+                        >
+                          <option value="">Rate 1-5</option>
+                          <option value="1">1 - Poor</option>
+                          <option value="2">2 - Fair</option>
+                          <option value="3">3 - Good</option>
+                          <option value="4">4 - Very Good</option>
+                          <option value="5">5 - Excellent</option>
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <select 
+                    value={reviewResponseForm.overall_rating} 
+                    onChange={(e) => setReviewResponseForm({...reviewResponseForm, overall_rating: parseInt(e.target.value)})}
+                  >
+                    <option value="">Overall Rating (1-5)</option>
+                    <option value="1">1 - Poor</option>
+                    <option value="2">2 - Fair</option>
+                    <option value="3">3 - Good</option>
+                    <option value="4">4 - Very Good</option>
+                    <option value="5">5 - Excellent</option>
+                  </select>
+                  
+                  <textarea
+                    placeholder="Detailed comments about your experience"
+                    value={reviewResponseForm.comments}
+                    onChange={(e) => setReviewResponseForm({...reviewResponseForm, comments: e.target.value})}
+                    rows="4"
+                  />
+                  
+                  <button onClick={handleReviewResponse}>Submit Review for AI Analysis</button>
+                </div>
+              </div>
+
+              {/* Review Results */}
+              <div className="review-results">
+                <h3>🤖 AI Analysis Results ({filteredData.review_responses.length})</h3>
+                {filteredData.review_responses.map(response => (
+                  <div key={response.id} className="review-result-item">
+                    <div className="ai-score-header">
+                      <h4>AI Score: {response.ai_overall_score}/10</h4>
+                      <span className={`risk-badge risk-${response.ai_risk_assessment}`}>
+                        {response.ai_risk_assessment.toUpperCase()} RISK
+                      </span>
+                    </div>
+                    
+                    <div className="flags-section">
+                      {response.ai_green_flags && response.ai_green_flags.length > 0 && (
+                        <div className="green-flags">
+                          <strong>🟢 Green Flags:</strong>
+                          <ul>
+                            {response.ai_green_flags.map((flag, idx) => (
+                              <li key={idx}>{flag}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {response.ai_red_flags && response.ai_red_flags.length > 0 && (
+                        <div className="red-flags">
+                          <strong>🔴 Red Flags:</strong>
+                          <ul>
+                            {response.ai_red_flags.map((flag, idx) => (
+                              <li key={idx}>{flag}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="ai-summary">
+                      <strong>📝 AI Analysis:</strong>
+                      <p>{response.ai_analysis_summary}</p>
+                    </div>
+                    
+                    <div className="review-meta">
+                      <small>Submitted: {new Date(response.created_at).toLocaleString()}</small>
+                    </div>
+                  </div>
+                ))}
+                {filteredData.review_responses.length === 0 && (
+                  <p>No AI reviews yet. Submit your first review above!</p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      case 'profile':
+        return (
+          <div className="section">
+            <h2>👤 AI-Powered Profile</h2>
+            <div className="profile-container">
+              {userProfile ? (
+                <div className="profile-card">
+                  <div className="profile-header">
+                    <h3>{currentUser.name}</h3>
+                    <div className="ai-score-display">
+                      <span className="score-number">{userProfile.overall_ai_score || 0}</span>
+                      <span className="score-label">AI Score</span>
+                    </div>
+                  </div>
+                  
+                  <div className="profile-stats">
+                    <div className="stat-item">
+                      <strong>Total Reviews:</strong> {userProfile.total_reviews}
+                    </div>
+                    
+                    <div className="category-scores">
+                      <h4>📊 Category Breakdown:</h4>
+                      {['payment_reliability', 'property_maintenance', 'communication', 'lease_compliance'].map(category => (
+                        <div key={category} className="category-item">
+                          <span>{category.replace('_', ' ').toUpperCase()}:</span>
+                          <div className="score-bar">
+                            <div 
+                              className="score-fill" 
+                              style={{width: `${(userProfile[`avg_${category}`] || 0) * 20}%`}}
+                            ></div>
+                            <span>{(userProfile[`avg_${category}`] || 0).toFixed(1)}/5</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {userProfile.green_flags_count && Object.keys(userProfile.green_flags_count).length > 0 && (
+                      <div className="flags-summary">
+                        <h4>🟢 Positive Traits:</h4>
+                        {Object.entries(userProfile.green_flags_count).map(([flag, count]) => (
+                          <span key={flag} className="flag-badge green">
+                            {flag} ({count})
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {userProfile.red_flags_count && Object.keys(userProfile.red_flags_count).length > 0 && (
+                      <div className="flags-summary">
+                        <h4>🔴 Areas for Improvement:</h4>
+                        {Object.entries(userProfile.red_flags_count).map(([flag, count]) => (
+                          <span key={flag} className="flag-badge red">
+                            {flag} ({count})
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="profile-footer">
+                    <small>Last Updated: {new Date(userProfile.last_updated).toLocaleString()}</small>
+                  </div>
+                </div>
+              ) : (
+                <div className="profile-loading">
+                  <p>Loading AI profile data...</p>
+                  <button onClick={() => {
+                    fetch(`${API_BASE}/users/${currentUser.id}/profile`)
+                      .then(res => res.json())
+                      .then(setUserProfile);
+                  }}>
+                    Refresh Profile
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      default:
+        return (
+          <div className="section">
+            <h2>{tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label}</h2>
+            <p>Feature coming soon...</p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className={`App ${darkMode ? 'dark-mode' : ''}`}>
+      <div className="header">
+        <h1>🏠 Rentum AI Dashboard - {currentUser.role.toUpperCase()}</h1>
+        <div className="header-actions">
+          <span className="user-greeting">Welcome, {currentUser.name}!</span>
+          <button onClick={handleLogout} className="logout-btn">Logout</button>
+          <button 
+            className="theme-toggle"
+            onClick={() => setDarkMode(!darkMode)}
+            title={`Switch to ${darkMode ? 'light' : 'dark'} mode`}
+          >
+            {darkMode ? '☀️' : '🌙'}
+          </button>
+        </div>
+      </div>
+      
+      {/* Navigation Tabs */}
+      <div className="nav-tabs">
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content">
+        {renderTabContent()}
+      </div>
+    </div>
+  );
+}
+
+export default App;
