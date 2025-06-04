@@ -603,20 +603,11 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
     }
 
 # ===== VERCEL ASGI EXPORT =====
-# Simple ASGI application export for Vercel
-# Vercel will automatically detect the 'app' variable 
-
-# Vercel handler function - REQUIRED for Vercel deployment
-def handler(request, response):
-    """Vercel serverless function handler"""
-    return app
-
-# ASGI application for Vercel
-# This allows Vercel to properly route requests to FastAPI
+# Vercel ASGI application export using Mangum adapter
 from mangum import Mangum
 
 # Wrap FastAPI app with Mangum adapter for serverless deployment
 handler = Mangum(app)
 
-# Export for Vercel (both 'app' and 'handler' for compatibility)
+# Export for Vercel
 __all__ = ["app", "handler"] 
