@@ -13,6 +13,7 @@ import json
 import io
 import os
 from PIL import Image
+import tempfile
 
 # ===== GOOGLE VISION OCR SERVICE =====
 from google.cloud import vision
@@ -24,36 +25,55 @@ class OCRService:
             print("🔍 Initializing Google Vision OCR...")
             
             # Debug: Check environment variables
-            import os
             creds_env = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
             creds_base64 = os.getenv('GOOGLE_APPLICATION_CREDENTIALS_BASE64')
             
             print(f"📋 GOOGLE_APPLICATION_CREDENTIALS exists: {bool(creds_env)}")
             print(f"📋 GOOGLE_APPLICATION_CREDENTIALS_BASE64 exists: {bool(creds_base64)}")
             
+            credentials_json = None
+            
             if creds_env:
                 print(f"📋 Credentials length: {len(creds_env)} characters")
                 print(f"📋 Credentials start: {creds_env[:50]}...")
                 
-                # Check if it's valid JSON
+                # Check if it's valid JSON content (not a file path)
                 try:
-                    import json
                     parsed = json.loads(creds_env)
                     print(f"📋 JSON is valid, type: {parsed.get('type', 'unknown')}")
                     print(f"📋 Project ID: {parsed.get('project_id', 'unknown')}")
+                    credentials_json = creds_env
                 except json.JSONDecodeError as je:
                     print(f"❌ JSON parsing failed: {je}")
                     print(f"📋 First 100 chars: {creds_env[:100]}")
+                    # If it's not valid JSON, treat as file path
+                    if os.path.exists(creds_env):
+                        print("📋 Treating as file path...")
+                        with open(creds_env, 'r') as f:
+                            credentials_json = f.read()
             
-            if creds_base64 and not creds_env:
+            elif creds_base64:
                 print("🔧 Decoding base64 credentials...")
                 import base64
                 try:
-                    decoded_creds = base64.b64decode(creds_base64).decode('utf-8')
-                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = decoded_creds
-                    print("✅ Base64 credentials decoded and set")
+                    credentials_json = base64.b64decode(creds_base64).decode('utf-8')
+                    parsed = json.loads(credentials_json)
+                    print(f"✅ Base64 credentials decoded, project: {parsed.get('project_id', 'unknown')}")
                 except Exception as be:
                     print(f"❌ Base64 decoding failed: {be}")
+            
+            # For Vercel serverless, write credentials to temporary file
+            if credentials_json:
+                print("📝 Writing credentials to temporary file for Vercel...")
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                    temp_file.write(credentials_json)
+                    temp_creds_path = temp_file.name
+                
+                # Set the environment variable to point to the temp file
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_creds_path
+                print(f"✅ Temporary credentials file created: {temp_creds_path}")
+            else:
+                print("❌ No valid credentials found")
             
             # Initialize Google Vision client
             self.client = vision.ImageAnnotatorClient()
@@ -593,10 +613,10 @@ def handler(request, response):
 
 # ASGI application for Vercel
 # This allows Vercel to properly route requests to FastAPI
-from mangum import Adapter
+from mangum import adapter
 
 # Wrap FastAPI app with Mangum adapter for serverless deployment
-handler = Adapter(app)
+handler = adapter(app)
 
 # Export for Vercel (both 'app' and 'handler' for compatibility)
 __all__ = ["app", "handler"] 
