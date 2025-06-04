@@ -603,17 +603,8 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
     }
 
 # ===== VERCEL ASGI EXPORT =====
-# Vercel ASGI application export using Mangum adapter
-from mangum import Mangum
+# Vercel has native ASGI support - no mangum needed!
+# Just export the FastAPI app directly
 
-# Wrap FastAPI app with Mangum adapter for serverless deployment
-# Use specific config for Vercel compatibility
-try:
-    handler = Mangum(app, lifespan="off", api_gateway_base_path=None)
-except Exception as e:
-    print(f"❌ Mangum initialization failed: {e}")
-    # Fallback: Direct ASGI app export
-    handler = app
-
-# Export for Vercel
-__all__ = ["app", "handler"] 
+# This is all we need for Vercel to handle FastAPI
+app 
