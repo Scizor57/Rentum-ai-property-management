@@ -16,7 +16,7 @@ import Login from './components/Login';
 
 // API URL configuration for both development and production
 const API_BASE = process.env.REACT_APP_API_URL || process.env.NODE_ENV === 'production' 
-  ? 'https://rentum-ai-property-management.vercel.app/api'  // Updated with correct backend URL
+  ? 'https://rentum-ai-property-management.vercel.app'  // Main production domain (auto-routes to latest deployment)
   : 'http://localhost:8008'; // Local development
 
 console.log('🔗 API_BASE URL:', API_BASE, '(Environment:', process.env.NODE_ENV, ')');
@@ -361,7 +361,12 @@ function App() {
       }
     } catch (error) {
       console.error('❌ OCR API connection failed:', error);
-      alert(`❌ Cannot Connect to OCR Service\n\nError: ${error.message}\n\nThis could mean:\n• Backend is not deployed\n• Network connection issue\n• Backend Google Vision is not configured\n\nPlease contact support if the issue persists.`);
+      console.error('❌ API_BASE URL being used:', API_BASE);
+      console.error('❌ Full request URL:', `${API_BASE}/ocr/scan`);
+      
+      let errorDetails = `❌ Cannot Connect to OCR Service\n\nError: ${error.message}\n\nRequest URL: ${API_BASE}/ocr/scan\n\nThis could mean:\n• Backend URL is incorrect\n• Backend is not deployed\n• Network connection issue\n• CORS issue\n\nPlease check the backend URL and deployment status.`;
+      
+      alert(errorDetails);
     }
   };
 
