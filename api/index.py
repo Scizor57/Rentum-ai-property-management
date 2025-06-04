@@ -5,7 +5,7 @@ FastAPI application with embedded OCR service for property management
 """
 
 # ===== IMPORTS =====
-from fastapi import FastAPI, UploadFile, File, Form, Query
+from fastapi import FastAPI, UploadFile, File, Form, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -406,6 +406,11 @@ app.add_middleware(
 )
 
 # ===== API ROUTES =====
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Handle favicon requests from browsers - return 204 No Content"""
+    return Response(status_code=204)
 
 @app.get("/")
 async def root():
