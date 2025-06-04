@@ -613,10 +613,10 @@ def handler(request, response):
 
 # ASGI application for Vercel
 # This allows Vercel to properly route requests to FastAPI
-from mangum import adapter
+from mangum import Mangum
 
 # Wrap FastAPI app with Mangum adapter for serverless deployment
-handler = adapter(app)
+handler = Mangum(app)
 
 # Export for Vercel (both 'app' and 'handler' for compatibility)
 __all__ = ["app", "handler"] 
