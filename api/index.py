@@ -607,7 +607,13 @@ async def list_ocr_scans(user_id: Optional[str] = Query(None)):
 from mangum import Mangum
 
 # Wrap FastAPI app with Mangum adapter for serverless deployment
-handler = Mangum(app)
+# Use specific config for Vercel compatibility
+try:
+    handler = Mangum(app, lifespan="off", api_gateway_base_path=None)
+except Exception as e:
+    print(f"❌ Mangum initialization failed: {e}")
+    # Fallback: Direct ASGI app export
+    handler = app
 
 # Export for Vercel
 __all__ = ["app", "handler"] 
